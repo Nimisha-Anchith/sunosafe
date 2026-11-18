@@ -96,9 +96,12 @@ def test_garbage_input():
 # ---------- API ----------
 @pytest.fixture
 def client(monkeypatch):
+    from app.config import Settings
+    # No token configured + request from this computer = allowed (independent of any local .env).
+    monkeypatch.setattr(main, "get_settings", lambda: Settings(None, ("1.1.1.1",), 5.0, None, ":memory:"))
     monkeypatch.setattr(main, "default_toolkit", lambda settings: scam_toolkit())
     main._hits.clear()
-    return TestClient(main.app)
+    return TestClient(main.app, client=("127.0.0.1", 50000))
 
 
 def test_api_returns_findings(client):

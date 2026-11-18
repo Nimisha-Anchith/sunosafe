@@ -86,19 +86,21 @@ SunoSafe replaces complex SOC dashboards with a **calm, conversational, regional
 | **SSRF guard:** only http/https on ports 80/443, blocks internal names and private/metadata IPs, checks every DNS answer, pins vetted IPs | ✅ |
 | **URL & network investigation:** safe redirect tracing (every hop re-checked), DNS, domain age via RDAP, TLS certificate, security headers, all with tool provenance via `POST /api/investigate/url` | ✅ |
 | **Reputation:** Google Safe Browsing across the whole redirect chain | 🟡 (needs API key for live use) |
-| **Message analysis:** OTP / UPI-PIN / bank-credential requests, urgency, impersonation, remote-access-app lures; paste or Android Share | 📋 |
-| **Mini-SIEM correlation:** event timeline, correlation rules, evidence-based severity, incidents with notes, provenance of every finding | 📋 |
+| **Message analysis:** OTP / UPI-PIN / bank-credential requests (negation-aware), urgency, impersonation, remote-access-app lures via `POST /api/messages/analyze`; Android Share comes in M5 | ✅ |
+| **Mini-SIEM correlation:** event timeline, correlation rules, evidence-based severity, incidents with notes, provenance of every finding | ✅ |
+| **Guardian Web View** (`/guardian`): incidents, why flagged, recovery steps, indicators, evidence timeline, notes, 1930 report summary | ✅ |
 | **Voice conversation (Agora + Murf):** "Check this message", "Why did you block it?", "Explain that in Malayalam" | 📋 (English voice loop verified on the Agora starter) |
 | **Protected Browser:** opens links inside SunoSafe and refuses blocked destinations, re-checking every redirect | 📋 |
 | **Link interceptor (`ACTION_VIEW`):** SunoSafe offered as a link handler or browser, so the user *can* route links through it | 📋 |
 | **Notification listener:** reads SMS/WhatsApp notification text, only after explicit permission | 📋 |
 | **Safe-Call Room, Whisper Mode:** inside a SunoSafe Agora call, a private spoken warning heard only by the protected user (separate private channel, so the other caller cannot hear it) | 📋 |
 | **Safe-Call Room, Active Takeover Mode:** the user mutes their own mic and lets an authoritative Murf persona speak to the caller, with evidence logged | 📋 |
-| **One-tap remediation (SOAR):** block link, end the *Agora* call, create incident, open dialer with **1930**, open **cybercrime.gov.in**, incident summary for the report | 📋 |
+| **Remediation (SOAR):** approval-gated link blocking, incident creation, recovery checklist, 1930 incident summary | ✅ (backend) |
+| **One-tap phone actions:** end the *Agora* call, open dialer with **1930**, open **cybercrime.gov.in** | 📋 |
 | **Guardian alert:** notify a trusted family member, only if the user has opted in | 📋 |
 | **Master Shield ON/OFF:** one switch that pauses all SunoSafe monitoring and processing | 📋 |
 | **Haptic SOS:** vibration pattern for danger, useful for visually impaired users | 📋 |
-| **PII redaction:** Aadhaar, OTP and card numbers masked before anything is logged | 📋 |
+| **PII redaction:** Aadhaar, PAN, OTP, card and user phone numbers masked before anything is stored | ✅ |
 | **Speech recognition in Malayalam, Kannada, Tamil:** the voice *output* is confirmed; the full speech-in → speech-out loop still needs testing | 📋 |
 
 ### What SunoSafe does *not* claim
@@ -210,7 +212,7 @@ Open http://localhost:8000/docs, choose `POST /api/investigate/url`, then **Try 
 |---|---|---|
 | M1 | URL extraction, normalisation, SSRF guard | ✅ |
 | M2 | Safe redirect tracing, DNS, RDAP domain age, TLS, Safe Browsing, investigation API | ✅ (Safe Browsing live check pending key) |
-| M3 | Scam-message rules, event store, correlation, incidents, Guardian Web View | 📋 |
+| M3 | Scam-message rules, event store, correlation, incidents, Guardian Web View | ✅ |
 | M4 | `/llm` endpoint with tool calling and policy gate, connected to Agora ConvoAI + Murf | 📋 |
 | M5 | Android app: Talk, Check message, I was scammed, Protected Browser, Shield toggle | 📋 |
 | M6 | Deployment, demo rehearsal, documentation | 📋 |

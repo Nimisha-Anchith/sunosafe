@@ -26,11 +26,16 @@ def load_env_file(path: Path = ENV_FILE) -> None:
             os.environ[key] = value
 
 
+DEFAULT_DB = Path(__file__).resolve().parent.parent / "data" / "sunosafe.db"
+
+
 @dataclass(frozen=True)
 class Settings:
     safe_browsing_api_key: str | None
     dns_servers: tuple[str, ...]
     http_timeout: float
+    api_token: str | None
+    db_path: str
 
 
 def get_settings() -> Settings:
@@ -40,4 +45,6 @@ def get_settings() -> Settings:
         safe_browsing_api_key=os.environ.get("SAFE_BROWSING_API_KEY") or None,
         dns_servers=tuple(s.strip() for s in servers.split(",") if s.strip()),
         http_timeout=float(os.environ.get("HTTP_TIMEOUT_SECONDS", "5")),
+        api_token=os.environ.get("API_TOKEN") or None,
+        db_path=os.environ.get("SUNOSAFE_DB") or str(DEFAULT_DB),
     )

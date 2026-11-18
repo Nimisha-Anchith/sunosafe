@@ -9,9 +9,12 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# Local data
+# Local data (incident database + SQLite WAL/SHM side files)
 *.db
+*.db-wal
+*.db-shm
 *.sqlite3
+backend/data/
 
 # Android (added later)
 android/.gradle/

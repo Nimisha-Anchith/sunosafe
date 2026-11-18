@@ -1,24 +1,39 @@
 """SunoSafe backend API.
 
 Run locally:
-    .venv\\Scripts\\python -m uvicorn app.main:app --reload --port 8000
-Then open http://localhost:8000/docs to try the endpoints in the browser.
+    .venv\\Scripts\\python -m uvicorn app.main:app --port 8000
+Then open http://localhost:8000/docs (API) or http://localhost:8000/guardian (Guardian Web View).
+
+Access control:
+    * If API_TOKEN is set, every /api request needs "Authorization: Bearer <token>".
+    * If it is not set, only requests from this computer (localhost) are accepted.
 """
 from __future__ import annotations
 
+import hmac
 import threading
 import time
 from collections import defaultdict, deque
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
 from app.security.investigate import default_toolkit, investigate_url
+from app.soc.service import SunoSafeService
+from app.soc.store import Store
 
-app = FastAPI(title="SunoSafe", version="0.2.0",
-              description="Voice-first digital safety companion — security backend")
+app = FastAPI(title="SunoSafe", version="0.3.0",
+              description="Voice-first digital safety companion — security backend and mini-SOC")
 
+WEB_DIR = Path(__file__).resolve().parent / "web"
+LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+# ---------------------------------------------------------------- rate limiting
 RATE_LIMIT = 20          # requests
 RATE_WINDOW = 60.0       # per this many seconds, per client address
 SWEEP_THRESHOLD = 1000   # when this many addresses are tracked, forget idle ones
@@ -47,22 +62,181 @@ def _check_rate_limit(client: str) -> None:
         q.append(now)
 
 
+def rate_limited(request: Request) -> None:
+    _check_rate_limit(request.client.host if request.client else "unknown")
+
+
+# ---------------------------------------------------------------- access control
+def require_access(request: Request, authorization: str | None = Header(default=None)) -> None:
+    token = get_settings().api_token
+    if token:
+        supplied = (authorization or "").removeprefix("Bearer ").strip()
+        if not hmac.compare_digest(supplied.encode(), token.encode()):
+            raise HTTPException(status_code=401, detail="Missing or wrong access token.")
+        return
+    host = request.client.host if request.client else ""
+    if host not in LOCAL_HOSTS:
+        raise HTTPException(status_code=401, detail="Remote access needs API_TOKEN to be configured.")
+
+
+@lru_cache(maxsize=1)
+def _default_service() -> SunoSafeService:
+    settings = get_settings()
+    return SunoSafeService(Store(settings.db_path), lambda: default_toolkit(get_settings()))
+
+
+def get_service() -> SunoSafeService:
+    return _default_service()
+
+
+Guarded = [Depends(require_access)]
+
+
+def _errors(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from None
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Not found.") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+# ---------------------------------------------------------------- request models
 class URLCheckRequest(BaseModel):
     url: str = Field(..., min_length=1, max_length=2048, description="A link exactly as it appeared")
 
 
+class MessageIn(BaseModel):
+    text: str = Field(..., min_length=1, max_length=5000)
+    sender: str | None = Field(default=None, max_length=100)
+    source: Literal["paste", "share", "notification", "voice"] = "paste"
+
+
+class CallReportIn(BaseModel):
+    description: str = Field(default="", max_length=2000)
+    caller_number: str | None = Field(default=None, max_length=20, pattern=r"^\+?[\d\s-]{7,20}$")
+    asked_for: list[Literal["otp", "upi_pin", "password", "card_details", "bank_details",
+                            "remote_app", "money"]] = Field(default_factory=list, max_length=10)
+
+
+class ScamReportIn(BaseModel):
+    description: str = Field(..., min_length=1, max_length=3000)
+    disclosed: list[Literal["otp", "upi_pin", "password", "card_details", "bank_details", "aadhaar",
+                            "money_paid", "remote_app_installed"]] = Field(default_factory=list, max_length=10)
+    amount_lost: float | None = Field(default=None, ge=0, le=1e9)
+    incident_id: int | None = None
+
+
+class BlockIn(BaseModel):
+    url: str = Field(..., min_length=1, max_length=2048)
+    confirm: bool = Field(..., description="Must be true: the user explicitly approved blocking")
+    approved_via: Literal["voice", "app", "guardian"]
+    incident_id: int | None = None
+
+
+class StepIn(BaseModel):
+    status: Literal["pending", "done", "skipped"]
+    actor: Literal["user", "guardian", "voice"] = "user"
+
+
+class NoteIn(BaseModel):
+    text: str = Field(..., min_length=1, max_length=2000)
+    author: Literal["user", "guardian", "analyst"] = "guardian"
+
+
+# ---------------------------------------------------------------- endpoints
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
 
 
-@app.post("/api/investigate/url")
-def investigate(req: URLCheckRequest, request: Request) -> dict:
-    """Investigate one link and return every finding with the tool that produced it.
+@app.get("/guardian", include_in_schema=False)
+def guardian_page() -> FileResponse:
+    return FileResponse(WEB_DIR / "guardian.html")
+
+
+@app.post("/api/investigate/url", dependencies=[*Guarded, Depends(rate_limited)])
+def investigate(req: URLCheckRequest) -> dict:
+    """Raw investigation of one link (all evidence, nothing stored).
 
     Declared with `def` (not `async def`) so FastAPI runs the blocking network
     checks in a worker thread instead of freezing the server.
     """
-    _check_rate_limit(request.client.host if request.client else "unknown")
-    settings = get_settings()
-    return investigate_url(req.url, default_toolkit(settings)).to_dict()
+    return investigate_url(req.url, default_toolkit(get_settings())).to_dict()
+
+
+@app.post("/api/messages/analyze", dependencies=[*Guarded, Depends(rate_limited)])
+def analyze_message(req: MessageIn, svc: SunoSafeService = Depends(get_service)) -> dict:
+    """Detect → investigate links → assess → store → correlate into an incident."""
+    return svc.analyze_message(req.text, req.sender, req.source)
+
+
+@app.post("/api/links/check", dependencies=[*Guarded, Depends(rate_limited)])
+def check_link(req: URLCheckRequest, svc: SunoSafeService = Depends(get_service)) -> dict:
+    return svc.check_link(req.url)
+
+
+@app.post("/api/calls/report", dependencies=[*Guarded, Depends(rate_limited)])
+def report_call(req: CallReportIn, svc: SunoSafeService = Depends(get_service)) -> dict:
+    return _errors(svc.report_call, req.description, req.caller_number, list(req.asked_for))
+
+
+@app.post("/api/incidents/report-scam", dependencies=Guarded)
+def report_scam(req: ScamReportIn, svc: SunoSafeService = Depends(get_service)) -> dict:
+    if req.incident_id is not None and svc.store.get_incident(req.incident_id) is None:
+        raise HTTPException(status_code=404, detail="Incident not found.")
+    return svc.report_scam(req.description, list(req.disclosed), req.amount_lost, req.incident_id)
+
+
+@app.post("/api/blocklist", dependencies=Guarded)
+def block(req: BlockIn, svc: SunoSafeService = Depends(get_service)) -> dict:
+    return _errors(svc.block_link, req.url, req.confirm, req.approved_via, req.incident_id)
+
+
+@app.get("/api/blocklist", dependencies=Guarded)
+def blocklist(svc: SunoSafeService = Depends(get_service)) -> list[dict]:
+    return svc.store.blocklist()
+
+
+@app.post("/api/protect/check", dependencies=Guarded)
+def protect_check(req: URLCheckRequest, svc: SunoSafeService = Depends(get_service)) -> dict:
+    """Protected browser asks before every navigation (fast: no network checks)."""
+    return svc.protect_check(req.url)
+
+
+@app.get("/api/incidents", dependencies=Guarded)
+def incidents(svc: SunoSafeService = Depends(get_service)) -> list[dict]:
+    return svc.store.list_incidents()
+
+
+@app.get("/api/incidents/{incident_id}", dependencies=Guarded)
+def incident(incident_id: int, svc: SunoSafeService = Depends(get_service)) -> dict:
+    detail = svc.incident_detail(incident_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Incident not found.")
+    return detail
+
+
+@app.get("/api/incidents/{incident_id}/summary", dependencies=Guarded, response_class=PlainTextResponse)
+def incident_summary(incident_id: int, svc: SunoSafeService = Depends(get_service)) -> str:
+    text = svc.incident_summary(incident_id)
+    if text is None:
+        raise HTTPException(status_code=404, detail="Incident not found.")
+    return text
+
+
+@app.patch("/api/incidents/{incident_id}/steps/{code}", dependencies=Guarded)
+def update_step(incident_id: int, code: str, req: StepIn, svc: SunoSafeService = Depends(get_service)) -> dict:
+    return _errors(svc.update_step, incident_id, code, req.status, req.actor)
+
+
+@app.post("/api/incidents/{incident_id}/notes", dependencies=Guarded)
+def add_note(incident_id: int, req: NoteIn, svc: SunoSafeService = Depends(get_service)) -> dict:
+    return _errors(svc.add_note, incident_id, req.author, req.text)
+
+
+@app.get("/api/events", dependencies=Guarded)
+def events(svc: SunoSafeService = Depends(get_service)) -> list[dict]:
+    return svc.store.recent_events(100)
