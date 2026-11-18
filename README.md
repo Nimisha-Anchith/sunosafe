@@ -84,7 +84,8 @@ SunoSafe replaces complex SOC dashboards with a **calm, conversational, regional
 |---|---|
 | **Link extraction & normalisation:** defanged links, look-alike Unicode (punycode), disguised IPs, the `brand@evil` trick, shorteners, UPI payment links, with plain-language reasons | ✅ |
 | **SSRF guard:** only http/https on ports 80/443, blocks internal names and private/metadata IPs, checks every DNS answer, pins vetted IPs | ✅ |
-| **URL & network investigation:** safe redirect tracing (every hop re-checked), DNS, domain age via RDAP, TLS certificate, security headers, Google Safe Browsing | 📋 |
+| **URL & network investigation:** safe redirect tracing (every hop re-checked), DNS, domain age via RDAP, TLS certificate, security headers, all with tool provenance via `POST /api/investigate/url` | ✅ |
+| **Reputation:** Google Safe Browsing across the whole redirect chain | 🟡 (needs API key for live use) |
 | **Message analysis:** OTP / UPI-PIN / bank-credential requests, urgency, impersonation, remote-access-app lures; paste or Android Share | 📋 |
 | **Mini-SIEM correlation:** event timeline, correlation rules, evidence-based severity, incidents with notes, provenance of every finding | 📋 |
 | **Voice conversation (Agora + Murf):** "Check this message", "Why did you block it?", "Explain that in Malayalam" | 📋 (English voice loop verified on the Agora starter) |
@@ -189,9 +190,17 @@ python -m venv .venv
 .venv\Scripts\python -m pytest -v
 ```
 
-Expected result: all tests pass. They use a fake DNS resolver, so no internet is needed.
+Expected result: all tests pass. They use fakes and mock transports, so no internet is needed.
 
-**Configuration (coming in later milestones):** keys go in `backend/.env`, which git ignores. Only the variable *names* will be listed in `.env.example`: Agora App ID and certificate, Murf API key, LLM key, Safe Browsing key.
+**Run the API:**
+
+```bash
+.venv\Scripts\python -m uvicorn app.main:app --port 8000
+```
+
+Open http://localhost:8000/docs, choose `POST /api/investigate/url`, then **Try it out** with `{"url": "https://expired.badssl.com/"}`.
+
+**Configuration:** copy `backend/.env.example` to `backend/.env` (git-ignored) and fill in values. Never put keys in code or chat.
 
 ---
 
@@ -200,7 +209,7 @@ Expected result: all tests pass. They use a fake DNS resolver, so no internet is
 | Milestone | Scope | Status |
 |---|---|---|
 | M1 | URL extraction, normalisation, SSRF guard | ✅ |
-| M2 | Safe redirect tracing, DNS, RDAP domain age, TLS, Safe Browsing | 📋 |
+| M2 | Safe redirect tracing, DNS, RDAP domain age, TLS, Safe Browsing, investigation API | ✅ (Safe Browsing live check pending key) |
 | M3 | Scam-message rules, event store, correlation, incidents, Guardian Web View | 📋 |
 | M4 | `/llm` endpoint with tool calling and policy gate, connected to Agora ConvoAI + Murf | 📋 |
 | M5 | Android app: Talk, Check message, I was scammed, Protected Browser, Shield toggle | 📋 |

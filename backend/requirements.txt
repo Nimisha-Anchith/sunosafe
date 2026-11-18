@@ -1,0 +1,6 @@
+# SunoSafe backend runtime dependencies (pinned versions tested 2026-11-18)
+fastapi==0.164.0
+uvicorn==0.54.0
+httpx==0.28.1          # RDAP + Safe Browsing (fixed, trusted hosts); brings httpcore + certifi
+dnspython==2.9.2       # DNS lookups against chosen public resolvers
+publicsuffixlist==1.1.2.20261118   # offline Public Suffix List -> registrable domain
