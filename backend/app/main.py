@@ -11,17 +11,23 @@ Access control:
 from __future__ import annotations
 
 import hmac
+import json
+import re
 import threading
 import time
 from collections import defaultdict, deque
+from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.agent.core import run_turn
+from app.agent.llm_client import make_llm
+from app.agent.policy_gate import Sessions
 from app.config import get_settings
 from app.security.investigate import default_toolkit, investigate_url
 from app.soc.service import SunoSafeService
@@ -74,9 +80,20 @@ def require_access(request: Request, authorization: str | None = Header(default=
         if not hmac.compare_digest(supplied.encode(), token.encode()):
             raise HTTPException(status_code=401, detail="Missing or wrong access token.")
         return
-    host = request.client.host if request.client else ""
-    if host not in LOCAL_HOSTS:
+    if not is_local_request(request):
         raise HTTPException(status_code=401, detail="Remote access needs API_TOKEN to be configured.")
+
+
+# A tunnel or reverse proxy runs ON this computer, so traffic from the internet
+# arrives looking like 127.0.0.1. Proxies add these headers; if any is present
+# the request did not really start on this machine.
+FORWARDED_HEADERS = ("x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "forwarded", "x-real-ip",
+                     "cf-connecting-ip", "cf-ray", "cdn-loop")
+
+
+def is_local_request(request: Request) -> bool:
+    host = request.client.host if request.client else ""
+    return host in LOCAL_HOSTS and not any(h in request.headers for h in FORWARDED_HEADERS)
 
 
 @lru_cache(maxsize=1)
@@ -240,3 +257,65 @@ def add_note(incident_id: int, req: NoteIn, svc: SunoSafeService = Depends(get_s
 @app.get("/api/events", dependencies=Guarded)
 def events(svc: SunoSafeService = Depends(get_service)) -> list[dict]:
     return svc.store.recent_events(100)
+
+
+# ---------------------------------------------------------------- voice agent
+SESSIONS = Sessions()
+INBOX: dict = {}     # the message most recently shared from the app (single-user prototype)
+_SESSION_ID = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+
+
+class InboxIn(BaseModel):
+    text: str = Field(..., min_length=1, max_length=5000)
+
+
+class ChatIn(BaseModel):
+    """OpenAI-style chat request as sent by Agora Conversational AI. Unknown fields are ignored."""
+    messages: list = Field(..., max_length=200)
+    stream: bool = True
+
+
+def get_llm():
+    return make_llm(get_settings())
+
+
+@app.post("/api/inbox", dependencies=Guarded)
+def share_message(req: InboxIn) -> dict:
+    """The app stores a pasted/shared message here; the user then asks about it by voice."""
+    INBOX.clear()
+    INBOX.update(text=req.text, at=datetime.now(UTC))
+    return {"stored": True}
+
+
+def _chunk(text: str | None, finish: str | None = None) -> str:
+    delta = {"role": "assistant", "content": text} if text is not None else {}
+    body = {"id": "chatcmpl-sunosafe", "object": "chat.completion.chunk", "created": int(time.time()),
+            "model": "sunosafe-agent", "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
+    return f"data: {json.dumps(body, ensure_ascii=False)}\n\n"
+
+
+@app.post("/llm/chat/completions", dependencies=[*Guarded, Depends(rate_limited)])
+def llm_chat(req: ChatIn, session: str = "default", svc: SunoSafeService = Depends(get_service),
+             llm=Depends(get_llm)):
+    """Custom-LLM endpoint for Agora Conversational AI.
+
+    Agora sends the conversation here; we run SunoSafe's tools ourselves and
+    stream back ONLY the words to speak (Server-Sent Events, OpenAI format).
+    """
+    if not _SESSION_ID.match(session):
+        raise HTTPException(status_code=422, detail="bad session id")
+    now = datetime.now(UTC)
+    pieces = run_turn(req.messages, llm, svc, SESSIONS.get(session, now), now, INBOX)
+    if not req.stream:
+        return {"id": "chatcmpl-sunosafe", "object": "chat.completion", "created": int(time.time()),
+                "model": "sunosafe-agent",
+                "choices": [{"index": 0, "finish_reason": "stop",
+                             "message": {"role": "assistant", "content": "".join(pieces)}}]}
+
+    def events():
+        for piece in pieces:
+            yield _chunk(piece)
+        yield _chunk(None, "stop")
+        yield "data: [DONE]\n\n"
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

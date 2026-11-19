@@ -28,7 +28,14 @@ Legend: ✅ Implemented & tested · 🟡 Implemented, untested · 📋 Planned �
 | Calls | User-reported suspicious call (number + what the caller asked for), correlated with messages | ✅ | `tests/test_service.py`; live |
 | Guardian | Guardian Web View (`/guardian`): incidents, rationale, steps, indicators, timeline with provenance, notes, 1930 summary | ✅ | Live in browser; attacker text rendered only as text (CSP + no innerHTML), checked with an injected `<script>` |
 | Security | API access control (Bearer `API_TOKEN`, or localhost only), validation, rate limits | ✅ | `tests/test_api_soc.py` |
-| Voice | Agora ConvoAI + custom LLM tool calling + policy gate | 📋 | Milestone 4 |
+| Voice | Agent brain: `/llm/chat/completions` (OpenAI format, streaming), 7 tools, case notes for follow-ups, model fallback, 3-sentence spoken replies | ✅ | `tests/test_agent.py`; live text run with Groq (`openai/gpt-oss-20b`): 1–3.5 s per turn |
+| Voice | Policy gate: blocking needs an investigated link AND the user's own clear words (short yes, or "block it"); questions and loose words are not consent | ✅ | `tests/test_agent.py`; live |
+| Voice | Prompt-injection limits: the LLM never sees the scam message or full link addresses, only our findings and labels like "link 1" | ✅ | `tests/test_agent.py` |
+| Voice | Shared-message inbox (`/api/inbox`), expires after 10 minutes | ✅ | `tests/test_agent.py`. Known limitation: one inbox for the whole backend (single-user prototype); per-user inbox comes with the Android app |
+| Voice | Agent brain connected to Agora Conversational AI + Murf by voice (needs a public HTTPS tunnel) | 📋 | Next step of Milestone 4 |
+| Voice | LLM provider: Groq free tier (1,000 requests, 8,000 tokens/min per model seen on 2026-11-19); Gemini free tier measured at 7–16 s per call, kept as fallback setting | 🟡 | Rate limits may slow rapid back-to-back checks |
+| Privacy | The user's transcribed words and our findings are sent to the LLM provider (Groq) | 📋 | Fine for synthetic demo data; real users need informed consent or a self-hosted model |
+| Security | Requests arriving through a tunnel/proxy are never treated as local; remote access requires `API_TOKEN` | ✅ | `tests/test_agent.py`; live |
 | Voice | Murf Falcon 2.1 voices for en-IN, hi-IN, ml-IN, kn-IN, ta-IN | ✅ (voice list) | Murf voices API, 2026-11-18: e.g. `hi-IN-jaya` supports all five |
 | Voice | Speech recognition for ml / kn / ta | 📋 | Must test full speech-in → speech-out loop |
 | Android | Talk / Check message / I was scammed / Protected Browser | 📋 | Milestone 5 |
