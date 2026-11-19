@@ -32,7 +32,12 @@ Legend: ✅ Implemented & tested · 🟡 Implemented, untested · 📋 Planned �
 | Voice | Policy gate: blocking needs an investigated link AND the user's own clear words (short yes, or "block it"); questions and loose words are not consent | ✅ | `tests/test_agent.py`; live |
 | Voice | Prompt-injection limits: the LLM never sees the scam message or full link addresses, only our findings and labels like "link 1" | ✅ | `tests/test_agent.py` |
 | Voice | Shared-message inbox (`/api/inbox`), expires after 10 minutes | ✅ | `tests/test_agent.py`. Known limitation: one inbox for the whole backend (single-user prototype); per-user inbox comes with the Android app |
-| Voice | Agent brain connected to Agora Conversational AI + Murf by voice (needs a public HTTPS tunnel) | 📋 | Next step of Milestone 4 |
+| Voice | Agent brain connected to Agora Conversational AI (custom LLM) + Murf Falcon, by voice | ✅ | Spoken test in Chrome on 2026-11-19: Agora's cloud called the gateway once per turn; link blocked with `approved_via=voice`; protected-browser check returned block |
+| Security | Public voice gateway (port 8001): only `/health` and `/llm/chat/completions`, mandatory `GATEWAY_TOKEN`, body-size limit, rate limit after auth, wrong-token limit, API docs off; private API (8000) never exposed | ✅ | `tests/test_gateway.py`; checked through Cloudflare: health 200, no/wrong token 401, private routes 404, 429 after 30 wrong tokens |
+| Security | Tunnel: cloudflared 2026.11.1 quick tunnel to 127.0.0.1:8001 (binary verified by SHA-256 and Cloudflare's signature); streaming replies arrive in separate pieces | ✅ | Live. Limits: address changes on every restart; no uptime guarantee; needs a fixed host for real use |
+| Privacy | Shared message is deleted from the inbox once analysed or expired; only the masked copy in the event log remains | ✅ | `tests/test_gateway.py` |
+| Voice | Voice web client listens on the laptop only (not the Wi-Fi network) | ✅ | Live check on the Wi-Fi address |
+| URL safety | Open issue: one investigation of a self-signed test site recorded no findings while later runs recorded the certificate problem | 📋 | Cause not yet found |
 | Voice | LLM provider: Groq free tier (1,000 requests, 8,000 tokens/min per model seen on 2026-11-19); Gemini free tier measured at 7–16 s per call, kept as fallback setting | 🟡 | Rate limits may slow rapid back-to-back checks |
 | Privacy | The user's transcribed words and our findings are sent to the LLM provider (Groq) | 📋 | Fine for synthetic demo data; real users need informed consent or a self-hosted model |
 | Security | Requests arriving through a tunnel/proxy are never treated as local; remote access requires `API_TOKEN` | ✅ | `tests/test_agent.py`; live |

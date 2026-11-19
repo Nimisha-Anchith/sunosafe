@@ -90,7 +90,7 @@ SunoSafe replaces complex SOC dashboards with a **calm, conversational, regional
 | **Mini-SIEM correlation:** event timeline, correlation rules, evidence-based severity, incidents with notes, provenance of every finding | ✅ |
 | **Guardian Web View** (`/guardian`): incidents, why flagged, recovery steps, indicators, evidence timeline, notes, 1930 report summary | ✅ |
 | **Voice agent brain:** `/llm` endpoint with tool calling and a policy gate; "Check this message", "Why is it dangerous?", "Yes, block it", replies in English or Hindi | ✅ (tested in text) |
-| **Voice conversation through Agora + Murf** using that brain | 📋 (Agora + Murf Falcon voice loop verified on the quickstart) |
+| **Voice conversation through Agora Conversational AI + Murf Falcon** using that brain, via an isolated, token-protected voice gateway | ✅ (spoken test passed; quick tunnel, so the address is temporary) |
 | **Protected Browser:** opens links inside SunoSafe and refuses blocked destinations, re-checking every redirect | 📋 |
 | **Link interceptor (`ACTION_VIEW`):** SunoSafe offered as a link handler or browser, so the user *can* route links through it | 📋 |
 | **Notification listener:** reads SMS/WhatsApp notification text, only after explicit permission | 📋 |
@@ -214,7 +214,7 @@ Open http://localhost:8000/docs, choose `POST /api/investigate/url`, then **Try 
 | M1 | URL extraction, normalisation, SSRF guard | ✅ |
 | M2 | Safe redirect tracing, DNS, RDAP domain age, TLS, Safe Browsing, investigation API | ✅ (Safe Browsing live check pending key) |
 | M3 | Scam-message rules, event store, correlation, incidents, Guardian Web View | ✅ |
-| M4 | `/llm` endpoint with tool calling and policy gate ✅ · connected to Agora ConvoAI + Murf 📋 | In progress |
+| M4 | `/llm` endpoint with tool calling and policy gate, isolated voice gateway, connected to Agora ConvoAI + Murf | ✅ |
 | M5 | Android app: Talk, Check message, I was scammed, Protected Browser, Shield toggle | 📋 |
 | M6 | Deployment, demo rehearsal, documentation | 📋 |
 | Next | Safe-Call Room (Whisper / Takeover), notification listener, link handler, call screening, more Indian languages | 📋 |

@@ -68,6 +68,11 @@ CREATE TABLE IF NOT EXISTS blocklist (
     created_at TEXT NOT NULL,
     UNIQUE(kind, value)
 );
+CREATE TABLE IF NOT EXISTS inbox (       -- the one message most recently shared from the app
+    id   INTEGER PRIMARY KEY CHECK (id = 1),
+    text TEXT NOT NULL,
+    at   TEXT NOT NULL
+);
 """
 
 
@@ -208,6 +213,20 @@ class Store:
 
     def notes(self, incident_id: int) -> list[dict]:
         return self._all("SELECT * FROM notes WHERE incident_id=? ORDER BY ts, id", (incident_id,))
+
+    # ---- shared-message inbox ------------------------------------------------
+    # Kept in the database (not in memory) so the private API process and the
+    # public voice gateway process both see it. Holds the raw message only until
+    # it is analysed or replaced; analysis results are stored redacted elsewhere.
+    def set_inbox(self, text: str, at: str) -> None:
+        self._exec("INSERT INTO inbox(id, text, at) VALUES (1, ?, ?) "
+                   "ON CONFLICT(id) DO UPDATE SET text=excluded.text, at=excluded.at", (text, at))
+
+    def get_inbox(self) -> dict | None:
+        return self._one("SELECT text, at FROM inbox WHERE id=1")
+
+    def clear_inbox(self) -> None:
+        self._exec("DELETE FROM inbox")
 
     # ---- blocklist ---------------------------------------------------------
     def add_block(self, kind: str, value: str, reason: str, incident_id: int | None,

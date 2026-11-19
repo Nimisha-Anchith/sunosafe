@@ -121,13 +121,18 @@ class ToolRunner:
         if not text:
             shared_at = self.inbox.get("at")
             if self.inbox.get("text") and shared_at and self.now - shared_at > INBOX_TTL:
+                self.svc.store.clear_inbox()   # do not keep an unmasked message past its time
                 return {"error": "message_expired",
                         "hint": "The shared message is old. Ask the user to share it again in the app."}
             text = self.inbox.get("text")
         if not text:
             return {"error": "no_message",
                     "hint": "Ask the user to paste or share the message in the SunoSafe app first."}
-        out = self.svc.analyze_message(text[:5000], source="voice" if args.get("text") else "share")
+        from_inbox = not args.get("text")
+        out = self.svc.analyze_message(text[:5000], source="share" if from_inbox else "voice")
+        if from_inbox:
+            # The raw message has done its job: only the masked copy in the event log remains.
+            self.svc.store.clear_inbox()
         view = self._remember(out, out["links"])
         view["warning_signs"] = [s["detail"] for s in out["signals"]][:6]
         self.session.case_notes = view

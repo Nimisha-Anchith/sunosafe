@@ -261,7 +261,6 @@ def events(svc: SunoSafeService = Depends(get_service)) -> list[dict]:
 
 # ---------------------------------------------------------------- voice agent
 SESSIONS = Sessions()
-INBOX: dict = {}     # the message most recently shared from the app (single-user prototype)
 _SESSION_ID = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 
 
@@ -280,11 +279,15 @@ def get_llm():
 
 
 @app.post("/api/inbox", dependencies=Guarded)
-def share_message(req: InboxIn) -> dict:
+def share_message(req: InboxIn, svc: SunoSafeService = Depends(get_service)) -> dict:
     """The app stores a pasted/shared message here; the user then asks about it by voice."""
-    INBOX.clear()
-    INBOX.update(text=req.text, at=datetime.now(UTC))
+    svc.store.set_inbox(req.text, datetime.now(UTC).isoformat())
     return {"stored": True}
+
+
+def _load_inbox(svc: SunoSafeService) -> dict:
+    row = svc.store.get_inbox()
+    return {"text": row["text"], "at": datetime.fromisoformat(row["at"])} if row else {}
 
 
 def _chunk(text: str | None, finish: str | None = None) -> str:
@@ -305,7 +308,7 @@ def llm_chat(req: ChatIn, session: str = "default", svc: SunoSafeService = Depen
     if not _SESSION_ID.match(session):
         raise HTTPException(status_code=422, detail="bad session id")
     now = datetime.now(UTC)
-    pieces = run_turn(req.messages, llm, svc, SESSIONS.get(session, now), now, INBOX)
+    pieces = run_turn(req.messages, llm, svc, SESSIONS.get(session, now), now, _load_inbox(svc))
     if not req.stream:
         return {"id": "chatcmpl-sunosafe", "object": "chat.completion", "created": int(time.time()),
                 "model": "sunosafe-agent",
