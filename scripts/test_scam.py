@@ -70,9 +70,9 @@ def e164(key: str) -> str:
 
 
 def spoken(number: str) -> str:
-    """+918012345678 -> 080-1234-5678 style, as a scammer would write it."""
+    """+918012345678 -> "+91 8012345678": a form SunoSafe's number detector reads (it skips 080-XXXX-XXXX)."""
     d = number.removeprefix("+91")
-    return f"0{d[:2]}-{d[2:6]}-{d[6:]}" if len(d) == 10 else number
+    return f"+91 {d}" if len(d) == 10 else number
 
 
 def vobiz(path: str, body: dict) -> tuple[int, str]:
