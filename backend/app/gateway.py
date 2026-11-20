@@ -283,3 +283,24 @@ async def agora_screen_tool(request: Request,
                     request.headers.get("content-type"), sorted(request.query_params.keys()), shape(body))
         raise HTTPException(status_code=422, detail="callerWords is required")
     return CALL_SHIELD.screen(svc, words, lang, datetime.now(UTC))
+
+
+# ---------------------------------------------------------------------------
+# Test scam call script (for scripts/test_scam.py): what Vobiz reads aloud when it
+# rings the owner's own phone. Public and harmless: fixed text, no data, no secrets.
+# ---------------------------------------------------------------------------
+_TEST_CALL = {
+    "hi": ("hi-IN", "नमस्ते, मैं एसबीआई बैंक के केवाईसी विभाग से बोल रहा हूँ। आपका खाता आज बंद हो जाएगा। "
+                    "अभी आपके फोन पर जो ओटीपी आया है, वह मुझे तुरंत बताइए।"),
+    "en": ("en-IN", "Hello, I am calling from the SBI KYC department. Your account will be blocked today. "
+                    "Please tell me the OTP you just received, right now."),
+}
+
+
+@app.api_route("/demo/scam-call.xml", methods=["GET", "POST"], include_in_schema=False)
+def demo_scam_call(lang: str = Query(default="hi", pattern=r"^(hi|en)$")) -> Response:
+    locale, text = _TEST_CALL[lang]
+    xml = (f'<?xml version="1.0" encoding="UTF-8"?><Response><Wait length="1"/>'
+           f'<Speak voice="WOMAN" language="{locale}" loop="2">{text}</Speak>'
+           f'<Speak voice="WOMAN" language="en-IN">This was a SunoSafe test call.</Speak><Hangup/></Response>')
+    return Response(content=xml, media_type="application/xml")

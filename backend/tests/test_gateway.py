@@ -41,7 +41,7 @@ def client(svc, monkeypatch):
 
 def test_only_the_public_routes_exist():
     paths = sorted(r.path for r in gateway.app.routes)
-    assert paths == ["/agora/tools/screen", "/device/alerts", "/device/calls", "/device/notifications", "/device/speech/{speech_id}", "/health",
+    assert paths == ["/agora/tools/screen", "/demo/scam-call.xml", "/device/alerts", "/device/calls", "/device/notifications", "/device/speech/{speech_id}", "/health",
                      "/llm/chat/completions"]
 
 
@@ -191,3 +191,13 @@ def test_messages_read_on_screen_are_recorded_with_their_source(client, svc):
     ev = next(e for e in svc.store.recent_events(50) if e["type"] == "message_analysed")
     assert ev["source"] == "message_rules/screen"
     assert client.post("/device/notifications", json={**NOTE, "source": "hacked"}, headers=DEVICE).status_code == 422
+
+
+def test_demo_scam_call_xml_is_public_fixed_and_valid(client):
+    import xml.etree.ElementTree as ET
+    r = client.get("/demo/scam-call.xml?lang=hi")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/xml")
+    root = ET.fromstring(r.content)
+    assert root.tag == "Response" and root.find("Speak").get("language") == "hi-IN"
+    assert client.post("/demo/scam-call.xml?lang=en").status_code == 200
+    assert client.get("/demo/scam-call.xml?lang=<x>").status_code == 422
