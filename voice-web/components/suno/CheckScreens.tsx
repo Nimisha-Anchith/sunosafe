@@ -59,6 +59,9 @@ function BlockLink({ url, onBlocked }: { url: string; onBlocked?: () => void }) 
 // ---------------------------------------------------------------------------
 // Check a message
 // ---------------------------------------------------------------------------
+// A made-up scam used by the "Example" button (clearly an example, real analysis).
+const EXAMPLE_SCAM = "[EXAMPLE] Dear SBI customer, your account will be BLOCKED today. Update KYC at https://wrong.host.badssl.com/kyc and share the OTP sent to you. Call 9876543210.";
+
 export function CheckScreen({
   settings,
   sharedText,
@@ -134,8 +137,27 @@ export function CheckScreen({
     <div className="space-y-4">
       <h2 className="text-[1.6em] font-extrabold">Check a message</h2>
       <p className="text-[#4b5a56]">
-        Paste an SMS or WhatsApp message here, or use <strong>Share → SunoSafe</strong> from the message itself.
+        Bring the message here from WhatsApp or SMS, or let the SunoSafe Android app check it for you.
       </p>
+      <Card>
+        <h3 className="font-bold">Get the message</h3>
+        <ol className="mt-2 list-decimal space-y-1 pl-6 text-[#4b5a56]">
+          <li>Open the chat below and <strong>press and hold</strong> the message.</li>
+          <li>Tap <strong>Copy</strong> (WhatsApp: the copy icon at the top).</li>
+          <li>Come back here and tap <strong>Paste</strong>, then <strong>Check this message</strong>.</li>
+        </ol>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          {/* Android opens the app itself; other systems fall back to the normal link. */}
+          <a href="intent://send#Intent;scheme=whatsapp;package=com.whatsapp;S.browser_fallback_url=https%3A%2F%2Fweb.whatsapp.com;end"
+            className="btn-quiet flex min-h-[3.4em] items-center justify-center rounded-2xl font-bold">💬 Open WhatsApp</a>
+          <a href="sms:" className="btn-quiet flex min-h-[3.4em] items-center justify-center rounded-2xl font-bold">✉️ Open Messages</a>
+        </div>
+        <p className="mt-3 text-[0.9em] text-[#4b5a56]">
+          Faster with the SunoSafe Android app: press and hold the message → <strong>Share</strong> → <strong>SunoSafe</strong>, and it
+          is checked and the answer is spoken at once. With <em>screen checking</em> switched on, the app also checks messages you
+          simply open or scroll, without copying anything.
+        </p>
+      </Card>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -156,9 +178,11 @@ export function CheckScreen({
           placeholder="Paste the message here"
           className="w-full rounded-2xl border-2 border-[#9fb3ae] bg-white p-4 text-[1em] focus:border-[#134e4a] focus:outline-none focus:ring-4 focus:ring-[#134e4a]/30"
         />
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           <BigButton tone="quiet" onClick={pasteFromClipboard}>📋 Paste</BigButton>
           <BigButton tone="quiet" onClick={() => { setText(''); setResult(null); setError(''); }}>Clear</BigButton>
+          <BigButton tone="quiet" ariaLabel="Fill in an example scam message to try"
+            onClick={() => { setResult(null); setError(''); setText(EXAMPLE_SCAM); }}>Example</BigButton>
         </div>
         <BigButton type="submit" disabled={busy || !text.trim()}>
           {busy ? 'Checking… this takes a few seconds' : '🔍 Check this message'}

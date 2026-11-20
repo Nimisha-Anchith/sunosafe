@@ -330,6 +330,18 @@ class MainActivity : Activity() {
         }
         column.addView(tiles)
 
+        column.addView(card("Check a message",
+            text("Press and hold a message in WhatsApp or Messages → Share → SunoSafe. Or copy it, come back and tap the green button.", 16f, color = muted),
+            button("🔍  Check the message I copied") { startActivity(Intent(this, ShareCheckActivity::class.java)) },
+            button("💬  Open WhatsApp", elev, ink) {
+                val open = packageManager.getLaunchIntentForPackage("com.whatsapp")
+                if (open != null) startActivity(open) else Toast.makeText(this, "WhatsApp is not installed.", Toast.LENGTH_SHORT).show()
+            },
+            button("✉️  Open Messages", elev, ink) {
+                startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_MESSAGING))
+            },
+        ))
+
         column.addView(card("Hear SunoSafe",
             text("Talk to the SunoSafe voice agent (Agora Conversational AI with a Murf Falcon voice).", 16f, color = muted),
             button("🎤  Talk about my latest warning") {

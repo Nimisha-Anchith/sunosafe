@@ -40,6 +40,19 @@
             </intent-filter>
         </activity>
 
+        <!-- "Share → SunoSafe" from WhatsApp / Messages, and "Check a message" inside the app. -->
+        <activity
+            android:name=".ShareCheckActivity"
+            android:exported="true"
+            android:label="Check with SunoSafe"
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <!--
             Screen checking (WhatsApp / SMS messages you open or scroll). Android only starts it
             after the user switches it on in Settings > Accessibility; only the system can bind.

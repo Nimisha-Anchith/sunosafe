@@ -106,12 +106,22 @@ class Agora:
         return next((a for a in self.listing("/agents") if a.get("agent_name") == AGENT_NAME), None)
 
 
-def gateway_url(lang: str) -> str:
-    """The public address of SunoSafe's live screening tool (same gateway as the voice brain)."""
+def gateway_base() -> str:
+    """Public gateway: SUNOSAFE_PUBLIC_GATEWAY (hosted, e.g. https://x.onrender.com/gw) or the laptop tunnel."""
+    fixed = WEB.get("SUNOSAFE_PUBLIC_GATEWAY", "").rstrip("/")
+    if fixed:
+        if not fixed.startswith("https://"):
+            sys.exit("SUNOSAFE_PUBLIC_GATEWAY must start with https://")
+        return fixed
     base = need(WEB, "NEXT_SUNOSAFE_LLM_URL", str(WEB_ENV)).split("?")[0]
     if not base.startswith("https://") or not base.endswith("/llm/chat/completions"):
         sys.exit("NEXT_SUNOSAFE_LLM_URL does not look like https://<host>/llm/chat/completions")
-    return base.removesuffix("/llm/chat/completions") + f"/agora/tools/screen?lang={lang}"
+    return base.removesuffix("/llm/chat/completions")
+
+
+def gateway_url(lang: str) -> str:
+    """The public address of SunoSafe's live screening tool."""
+    return gateway_base() + f"/agora/tools/screen?lang={lang}"
 
 
 LANGUAGE_NAMES = {"en": "English", "hi": "Hindi", "ml": "Malayalam", "kn": "Kannada", "ta": "Tamil"}

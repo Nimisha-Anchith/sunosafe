@@ -97,8 +97,8 @@ def scam_text() -> str:
 def xml_url(lang: str) -> str:
     if E.get("TEST_CALL_XML_URL"):
         return E["TEST_CALL_XML_URL"]
-    llm = need("NEXT_SUNOSAFE_LLM_URL").split("?")[0]
-    return llm.removesuffix("/llm/chat/completions") + f"/demo/scam-call.xml?lang={lang}"
+    base = E.get("SUNOSAFE_PUBLIC_GATEWAY", "").rstrip("/") or         need("NEXT_SUNOSAFE_LLM_URL").split("?")[0].removesuffix("/llm/chat/completions")
+    return base + f"/demo/scam-call.xml?lang={lang}"
 
 
 def do_call(lang: str) -> bool:
