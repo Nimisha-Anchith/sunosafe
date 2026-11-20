@@ -40,6 +40,7 @@ class SunoNotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         Prefs.setLastResult(this, "Notification access is on. SunoSafe is ready.")
+        ProtectionService.start(this)
         if (poller == null) {
             poller = Executors.newSingleThreadScheduledExecutor().also {
                 it.scheduleWithFixedDelay({ pollShieldAlerts() }, 5, POLL_SECONDS, TimeUnit.SECONDS)
@@ -53,6 +54,7 @@ class SunoNotificationListener : NotificationListenerService() {
     }
 
     private fun pollShieldAlerts() {
+        if (ProtectionService.running) return   // the protection service polls instead
         try {
             val c = applicationContext
             if (!Prefs.monitoringOn(c) || !Prefs.isPaired(c)) return
@@ -102,6 +104,7 @@ class SunoNotificationListener : NotificationListenerService() {
             return
         }
         Prefilter.reason(text) ?: return    // ordinary message: stays on the phone
+        if (!Checker.firstTime(text)) return  // already warned via the SMS reader or the screen
 
         val key = (sbn.packageName + "\n" + text).hashCode()
         val now = System.currentTimeMillis()

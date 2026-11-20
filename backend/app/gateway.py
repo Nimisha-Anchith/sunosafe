@@ -148,7 +148,7 @@ class DeviceNotification(BaseModel):
     text: str = Field(..., min_length=1, max_length=4000, description="The notification text Android exposes")
     device_id: str = Field(..., min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
     lang: str = Field(default="en", pattern=r"^(en|hi|ml|kn|ta)$")
-    source: str = Field(default="notification", pattern=r"^(notification|screen|share)$",
+    source: str = Field(default="notification", pattern=r"^(notification|screen|share|sms)$",
                         description="notification = new notification; screen = message opened or scrolled; share = user asked")
 
 
@@ -290,17 +290,30 @@ async def agora_screen_tool(request: Request,
 # rings the owner's own phone. Public and harmless: fixed text, no data, no secrets.
 # ---------------------------------------------------------------------------
 _TEST_CALL = {
-    "hi": ("hi-IN", "नमस्ते, मैं एसबीआई बैंक के केवाईसी विभाग से बोल रहा हूँ। आपका खाता आज बंद हो जाएगा। "
-                    "अभी आपके फोन पर जो ओटीपी आया है, वह मुझे तुरंत बताइए।"),
-    "en": ("en-IN", "Hello, I am calling from the SBI KYC department. Your account will be blocked today. "
-                    "Please tell me the OTP you just received, right now."),
+    "hi": ("hi-IN", [
+        "नमस्ते, मैं एसबीआई बैंक के केवाईसी विभाग से बोल रहा हूँ। आपका खाता आज बंद हो जाएगा। क्या आप मेरी बात सुन रहे हैं?",
+        "देखिए, आपके फोन पर अभी एक ओटीपी आया है। वह ओटीपी मुझे तुरंत बताइए, नहीं तो आपका खाता हमेशा के लिए बंद हो जाएगा।",
+        "जल्दी कीजिए, मेरे पास सिर्फ दो मिनट हैं। बस छह अंकों का ओटीपी बोल दीजिए।",
+    ]),
+    "en": ("en-IN", [
+        "Hello, I am calling from the SBI KYC department. Your account will be blocked today. Can you hear me?",
+        "Look, you just received an OTP on your phone. Tell me that OTP right now, or your account will be closed for ever.",
+        "Please hurry, I only have two minutes. Just read out the six digit OTP.",
+    ]),
 }
+_END = {"hi": "ठीक है, मैं आपको बाद में फिर कॉल करूँगा।", "en": "Fine, I will call you again later."}
 
 
 @app.api_route("/demo/scam-call.xml", methods=["GET", "POST"], include_in_schema=False)
 def demo_scam_call(lang: str = Query(default="hi", pattern=r"^(hi|en)$")) -> Response:
-    locale, text = _TEST_CALL[lang]
-    xml = (f'<?xml version="1.0" encoding="UTF-8"?><Response><Wait length="1"/>'
-           f'<Speak voice="WOMAN" language="{locale}" loop="2">{text}</Speak>'
-           f'<Speak voice="WOMAN" language="en-IN">This was a SunoSafe test call.</Speak><Hangup/></Response>')
+    """A pushy test 'scammer': speaks, waits while you answer (Wait in silence mode ends when you stop
+    talking), pushes again for the OTP, then hangs up."""
+    locale, lines = _TEST_CALL[lang]
+    parts = ['<?xml version="1.0" encoding="UTF-8"?><Response><Wait length="1"/>']
+    for line in lines:
+        parts.append(f'<Speak voice="MAN" language="{locale}">{line}</Speak>')
+        parts.append('<Wait length="10" silence="true" minSilence="1500"/>')
+    parts.append(f'<Speak voice="MAN" language="{locale}">{_END[lang]}</Speak>')
+    parts.append('<Speak voice="WOMAN" language="en-IN">This was a SunoSafe test call.</Speak><Hangup/></Response>')
+    xml = "".join(parts)
     return Response(content=xml, media_type="application/xml")

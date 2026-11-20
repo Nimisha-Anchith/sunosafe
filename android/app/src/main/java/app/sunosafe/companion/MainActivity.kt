@@ -62,6 +62,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        ProtectionService.start(this)
         refresh()
         // Keep the "this caller is linked to a scam" warning on the phone, in the chosen language,
         // so it can be spoken at once while a call is ringing, even with a poor connection.
@@ -99,6 +100,7 @@ class MainActivity : Activity() {
             )
             .setPositiveButton("Yes, connect") { _, _ ->
                 Prefs.savePairing(this, gateway, token, app)
+                ProtectionService.start(this)
                 Toast.makeText(this, "Connected.", Toast.LENGTH_LONG).show()
                 refresh()
             }
@@ -136,7 +138,9 @@ class MainActivity : Activity() {
             append("${mark(warningsAllowed())}  Allowed to show warnings\n")
             append("${mark(Prefs.isPaired(this@MainActivity))}  Connected to your SunoSafe\n")
             append("${mark(screeningRoleHeld())}  Checking incoming callers\n")
-            append("${mark(screenReaderOn())}  Checking messages on screen (WhatsApp, SMS)")
+            append("${mark(screenReaderOn())}  Checking messages on screen (WhatsApp, SMS)\n")
+            append("${mark(SmsInbox.allowed(this@MainActivity))}  Reading new SMS and the SMS inbox\n")
+            append("${mark(ProtectionService.running)}  Protection running in the background")
         }
         (statusCard.background as GradientDrawable).apply {
             setColor(if (watching) Color.parseColor("#0F2E24") else Color.parseColor("#2A2210"))
@@ -144,6 +148,7 @@ class MainActivity : Activity() {
         }
         statusTitle.setTextColor(if (watching) green else Color.parseColor("#FBBF24"))
         stats.text = "Messages looked at on this phone: ${Prefs.count(this, "seen")}\n" +
+            "New SMS checked: ${Prefs.count(this, "sms_seen")}, inbox scans: ${Prefs.count(this, "inbox_scans")}\n" +
             "Screens checked in WhatsApp/SMS: ${Prefs.count(this, "screen_scans")} " +
             "(warnings: ${Prefs.count(this, "screen_alerts")})\n" +
             "Hidden by the app (could not check): ${Prefs.count(this, "hidden")}\n" +
@@ -173,6 +178,27 @@ class MainActivity : Activity() {
         }
         @Suppress("DEPRECATION")
         startActivityForResult(roles.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING), 2)
+    }
+
+    private fun scanInbox() {
+        if (!Prefs.isPaired(this)) {
+            Toast.makeText(this, "Connect to your SunoSafe first (step 3).", Toast.LENGTH_LONG).show()
+            return
+        }
+        Toast.makeText(this, "Scanning your SMS inbox (last 30 days)…", Toast.LENGTH_SHORT).show()
+        SmsInbox.scan(this) { scanned, found ->
+            runOnUiThread {
+                Toast.makeText(this, "Scanned $scanned SMS: $found look like scams.", Toast.LENGTH_LONG).show()
+                refresh()
+            }
+        }
+    }
+
+    @Deprecated("Activity API")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 6 && SmsInbox.allowed(this)) scanInbox()
+        refresh()
     }
 
     private fun openWeb(path: String) {
@@ -361,6 +387,10 @@ class MainActivity : Activity() {
             },
             text("3.  Connect: open your SunoSafe web app on this phone → Settings → \"Connect Android app\".", 16f),
             button("4.  Let SunoSafe check unknown callers") { requestScreeningRole() },
+            button("6.  Read my SMS (new + inbox)") {
+                if (SmsInbox.allowed(this)) scanInbox()
+                else requestPermissions(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS), 6)
+            },
             button("5.  Check messages I open in WhatsApp / SMS") {
                 Toast.makeText(this, "Installed apps → SunoSafe screen checking → On. If it is greyed out: " +
                     "App info → ⋮ → Allow restricted settings.", Toast.LENGTH_LONG).show()
@@ -429,11 +459,6 @@ class MainActivity : Activity() {
 
         root.addView(column)
         return ScrollView(this).apply { addView(root) }
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        refresh()
     }
 
     @Deprecated("Deprecated in Java")

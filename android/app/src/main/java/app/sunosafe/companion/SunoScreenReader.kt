@@ -61,7 +61,7 @@ class SunoScreenReader : AccessibilityService() {
         }
         if (fresh.isEmpty()) return
         Prefs.bump(this, "screen_seen")
-        val suspicious = fresh.filter { Prefilter.reason(it) != null }.take(MAX_PER_SCAN)
+        val suspicious = fresh.filter { Prefilter.reason(it) != null && Checker.firstTime(it) }.take(MAX_PER_SCAN)
         val appName = Prefs.WATCHED_APPS[pkg] ?: "a messaging app"
         if (suspicious.isEmpty()) {
             Prefs.setLastResult(this, "Checked ${fresh.size} message(s) on screen in $appName: nothing suspicious.")

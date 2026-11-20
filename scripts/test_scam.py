@@ -3,7 +3,8 @@
 No AI involved; plain Python standard library. It only ever contacts YOUR OWN number
 (TEST_TARGET_NUMBER), so it cannot be used to message anyone else.
 
-    python scripts/test_scam.py call              # Vobiz rings your phone and reads a scam script (Hindi)
+    python scripts/test_scam.py call              # scam message first, then 20 s later the scam call (Hindi)
+    python scripts/test_scam.py call --call-only  # only the call (no warning while ringing: number unknown)
     python scripts/test_scam.py call --lang=en    # same, English
     python scripts/test_scam.py sms               # Vobiz sends the scam SMS (India: needs DLT, see below)
     python scripts/test_scam.py notify            # USB alternative: posts the scam message as a phone notification
@@ -135,6 +136,13 @@ def do_sms() -> bool:
     return 200 <= status < 300
 
 
+def adb_connected() -> bool:
+    if not ADB.is_file():
+        return False
+    r = subprocess.run([str(ADB), "devices"], capture_output=True, text=True, timeout=15)
+    return any(line.endswith("	device") for line in r.stdout.splitlines())
+
+
 def do_notify() -> bool:
     if not ADB.is_file():
         print("  adb not found at", ADB)
@@ -156,6 +164,13 @@ def main() -> None:
     action = args[0] if args else ""
     print(f"Target: your phone {e164('TEST_TARGET_NUMBER')[:5]}*****{e164('TEST_TARGET_NUMBER')[-2:]}")
     if action == "call":
+        if "--call-only" not in sys.argv:
+            # The ringing warning needs the number to be known from a scam message first (as in real life).
+            print("First the scam message that mentions this number (so the phone can warn while it rings):")
+            if not (adb_connected() and do_notify()) and not do_sms():
+                print("  Could not deliver the message (no USB phone, SMS refused). The call will ring without a warning.")
+            print("Calling in 20 seconds...")
+            time.sleep(20)
         do_call(lang)
     elif action == "sms":
         do_sms()
