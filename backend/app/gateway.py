@@ -2,10 +2,12 @@
 
 Agora's cloud must be able to call our LLM endpoint, so something has to be
 public. Instead of exposing the whole backend, this tiny separate app serves
-exactly two routes:
+exactly four routes:
 
     GET  /health                 liveness check, no data
-    POST /llm/chat/completions   the voice agent's brain, token required
+    POST /llm/chat/completions   the voice agent's brain, GATEWAY_TOKEN required
+    POST /device/notifications   the Android companion reports a notification, DEVICE_TOKEN required
+    POST /device/calls           the Android companion reports an incoming caller, DEVICE_TOKEN required
 
 Everything else (incidents, blocklist, Guardian page, API docs) exists only on
 the private app (port 8000) and answers 404 here.
@@ -25,15 +27,19 @@ Protections on the public route:
 """
 from __future__ import annotations
 
+import hashlib
 import hmac
 import threading
 import time
 from collections import deque
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from pydantic import BaseModel, Field
 
 from app import main as private_app
 from app.config import get_settings
+from app.soc import phrases
+from app.soc.service import SunoSafeService
 
 app = FastAPI(title="SunoSafe voice gateway", docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -65,17 +71,30 @@ def _failed_attempt_allowed(client: str) -> bool:
         return True
 
 
-def require_gateway_token(request: Request, authorization: str | None = Header(default=None)) -> None:
-    token = get_settings().gateway_token
-    if not token:
+def _check_token(expected: str | None, request: Request, authorization: str | None) -> None:
+    if not expected:
         raise HTTPException(status_code=503, detail="Gateway is not configured.")
     supplied = (authorization or "").removeprefix("Bearer ").strip()
-    if hmac.compare_digest(supplied.encode(), token.encode()):
+    if hmac.compare_digest(supplied.encode(), expected.encode()):
         return
     client = request.client.host if request.client else "unknown"
     if not _failed_attempt_allowed(client):
         raise HTTPException(status_code=429, detail="Too many failed attempts.")
     raise HTTPException(status_code=401, detail="Missing or wrong access token.")
+
+
+def require_gateway_token(request: Request, authorization: str | None = Header(default=None)) -> None:
+    """Token held by Agora, for the voice brain only."""
+    _check_token(get_settings().gateway_token, request, authorization)
+
+
+def require_device_token(request: Request, authorization: str | None = Header(default=None)) -> None:
+    """Token held by the paired Android companion, for reporting notifications only.
+
+    It is a different secret from the voice token, so a leak of one does not
+    open the other route.
+    """
+    _check_token(get_settings().device_token, request, authorization)
 
 
 MAX_BODY_BYTES = 256 * 1024   # a conversation history is a few kilobytes; refuse anything huge
@@ -99,3 +118,90 @@ app.add_api_route(
     methods=["POST"],
     dependencies=[Depends(require_gateway_token), Depends(limit_body_size), Depends(private_app.rate_limited)],
 )
+
+
+# ---------------------------------------------------------------------------
+# Android companion: automatic notification monitoring
+# ---------------------------------------------------------------------------
+#   phone notification ─► on-phone pre-filter ─► POST /device/notifications ─► message rules
+#        (only notifications with a link or scam wording leave the phone)      + link investigation
+#                                                                              + correlation / incident
+#   phone ◄── verdict + one sentence to speak ◄──────────────────────────────────────┘
+#
+# The phone only sends what Android itself shows in the notification, and only
+# after the user has switched on notification access for SunoSafe.
+
+DEDUPE_SECONDS = 600   # the same text again within 10 minutes reuses the first answer
+_recent: dict[str, tuple[float, dict]] = {}
+_recent_lock = threading.Lock()
+
+
+class DeviceNotification(BaseModel):
+    app: str = Field(..., min_length=1, max_length=120, pattern=r"^[A-Za-z0-9_.]+$",
+                     description="Android package that posted it, e.g. com.whatsapp")
+    title: str = Field(default="", max_length=200, description="What Android shows as the title (usually the sender)")
+    text: str = Field(..., min_length=1, max_length=4000, description="The notification text Android exposes")
+    device_id: str = Field(..., min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    lang: str = Field(default="en", pattern=r"^(en|hi|ml|kn|ta)$")
+
+
+class DeviceCall(BaseModel):
+    number: str = Field(default="", max_length=20, pattern=r"^[0-9+\s-]*$",
+                        description="Caller number as Android exposes it; empty when hidden")
+    device_id: str = Field(..., min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    lang: str = Field(default="en", pattern=r"^(en|hi|ml|kn|ta)$")
+
+
+def _cached(key: str, now: float) -> dict | None:
+    with _recent_lock:
+        for k in [k for k, (t, _) in _recent.items() if now - t > DEDUPE_SECONDS]:
+            del _recent[k]
+        hit = _recent.get(key)
+        return hit[1] if hit else None
+
+
+@app.post("/device/notifications",
+          dependencies=[Depends(require_device_token), Depends(limit_body_size), Depends(private_app.rate_limited)])
+def device_notification(item: DeviceNotification,
+                        svc: SunoSafeService = Depends(private_app.get_service)) -> dict:
+    """Investigate one notification reported by the Android companion.
+
+    Returns a small answer for the phone: whether to alert, how serious, and one
+    calm sentence to show and speak. Evidence stays in the mini-SIEM.
+    """
+    key = hashlib.sha256(f"{item.device_id}\n{item.app}\n{item.lang}\n{item.text}".encode()).hexdigest()
+    now = time.monotonic()
+    previous = _cached(key, now)
+    if previous is not None:
+        return {**previous, "duplicate": True}
+
+    out = svc.analyze_message(item.text, sender=item.title or None, source="notification")
+    verdict = out["verdict"]
+    alert = verdict["label"] != "no_known_issues" and verdict["level"] in ("medium", "high", "critical")
+    answer = {
+        "alert": alert,
+        "level": verdict["level"],
+        "label": verdict["label"],
+        "say": phrases.message_alert(item.lang, verdict["level"], verdict["summary"]),
+        "incident_id": out["incident_id"],
+        "duplicate": False,
+        # Numbers written in a dangerous message, so the phone can warn instantly,
+        # without a network round trip, if one of them calls.
+        "watch_numbers": out.get("phone_numbers", [])[:5] if alert else [],
+    }
+    with _recent_lock:
+        _recent[key] = (now, answer)
+    return answer
+
+
+@app.post("/device/calls",
+          dependencies=[Depends(require_device_token), Depends(limit_body_size), Depends(private_app.rate_limited)])
+def device_call(item: DeviceCall, svc: SunoSafeService = Depends(private_app.get_service)) -> dict:
+    """An incoming call seen by the Android call-screening service.
+
+    Only callers already linked to scam evidence are recorded; other numbers
+    are looked up and forgotten.
+    """
+    out = svc.screen_call(item.number or None)
+    return {"alert": out["alert"], "level": out["level"], "incident_id": out["incident_id"],
+            "say": phrases.call_alert(item.lang) if out["alert"] else "", "reason": out["reason"]}

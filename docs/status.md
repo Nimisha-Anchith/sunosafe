@@ -48,3 +48,20 @@ Legend: ✅ Implemented & tested · 🟡 Implemented, untested · 📋 Planned �
 | Calls | Agora RTC call with private warning | 📋 | After MVP |
 | Calls | Cellular call screening (number only) | 📋 | Needs call-screening role |
 | Calls | Cellular call audio / reversing UPI / freezing accounts | 🔒 | Not possible for an app; guide user to bank, 1930, cybercrime.gov.in |
+
+## Update 20 Nov 2026 — Intervention Intelligence build
+
+| Area | Feature | Status | Evidence |
+|---|---|---|---|
+| Android | Native NotificationListenerService, explicit access, per-app on/off, hidden-text handling, on-phone pre-filter, de-duplication | 🟡 Built, compiles, unit tests pass | Not yet run on the S24 (phone was not connected during the build) |
+| Android | Call screening (CallScreeningService + caller-ID role): never blocks; instant local check against numbers from scam messages; backend correlation | 🟡 Built, compiles | Backend side tested live through the tunnel; phone side not yet run |
+| Android | Instant spoken warnings (phone voice) in English or Hindi; tap opens the briefed Agora voice agent or the evidence | 🟡 Built | Hindi phrase returned by the live backend; phone playback not yet tested |
+| Mini-SIEM | C2 impersonation-story correlation (same claimed brand, only for suspicious events); C3 cross-channel escalation (message + call) | ✅ | `tests/test_intervention.py`; live end-to-end run through the tunnel |
+| Mini-SIEM | Call screening endpoint `/device/calls`; ordinary caller numbers are not stored | ✅ | Tests + live run |
+| Voice | Agent opened from an incident is briefed (greeting + evidence + link labels) and can block by voice with user approval | ✅ (text) / 🟡 (spoken) | Live run through the tunnel: answer 1.6 s, block approved, audit "approved by voice"; Agora agent started with this config (RUNNING) in English and Hindi |
+| Voice | New tools: investigate_url, check_caller_risk, get_incident_details, get_security_timeline, recommend_protective_action, record_user_action | ✅ | Tests |
+| Voice | Scam-call practice drill (no tools, never collects data) | ✅ (text) / 🟡 (spoken) | Tests; Agora agent RUNNING in drill mode |
+| Voice | Preferred language: replies + Murf locale in en/hi/ml/kn/ta; listening en + hi (Deepgram) | 🟡 | Agent accepted Hindi config; spoken Hindi not yet tested by a person |
+| Web app | Evidence timeline on the phone, "Hear SunoSafe explain this", deep links from the companion, Intervention demo (simulated inputs, real engine) | ✅ | Checked at phone size in the browser |
+| Known issue | Phone Chrome voice error (InvalidModificationError); fix applied (Agora SDK 4.24.10 + ENABLE_PREALLOC_PC off) | 🟡 | Not yet confirmed on the phone |
+| Not possible | Listening to or transcribing ordinary cellular calls; reversing payments | 🔒 | Android/bank limits; SunoSafe warns while ringing and guides recovery instead |

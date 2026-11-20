@@ -1,6 +1,5 @@
-import LandingPage from '@/components/LandingPage'
+import SunoApp from '@/components/suno/SunoApp';
 
 export default function Home() {
-  return <LandingPage />
+  return <SunoApp />;
 }
-

@@ -40,6 +40,7 @@ class Settings:
     llm_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
     llm_models: tuple[str, ...] = ("gemini-3.5-flash-lite", "gemini-flash-lite-latest")
     gateway_token: str | None = None    # token for the public voice gateway only (port 8001)
+    device_token: str | None = None     # token for the paired Android companion only
 
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
@@ -73,6 +74,7 @@ def get_settings() -> Settings:
         api_token=os.environ.get("API_TOKEN") or None,
         db_path=os.environ.get("SUNOSAFE_DB") or str(DEFAULT_DB),
         gateway_token=os.environ.get("GATEWAY_TOKEN") or None,
+        device_token=os.environ.get("DEVICE_TOKEN") or None,
         llm_api_key=llm_key,
         llm_base_url=llm_url,
         llm_models=tuple(m.strip() for m in (os.environ.get("LLM_MODELS") or llm_default_models).split(",")

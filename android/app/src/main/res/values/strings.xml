@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SunoSafe</string>
+    <string name="listener_label">SunoSafe scam warnings</string>
+    <string name="channel_alerts">Scam warnings</string>
+    <string name="channel_alerts_desc">Warnings when SunoSafe finds a suspicious message</string>
+</resources>

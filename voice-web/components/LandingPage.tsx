@@ -9,6 +9,7 @@ import type {
   ClientStartRequest,
   AgentResponse,
   AgoraRenewalTokens,
+  VoiceContext,
 } from '../types/conversation';
 import { ErrorBoundary } from './ErrorBoundary';
 import { LoadingSkeleton } from './LoadingSkeleton';
@@ -38,6 +39,15 @@ const AgoraProvider = dynamic(
           typeof AgoraRTC.createClient
         > | null>(null);
         if (!clientRef.current) {
+          // SunoSafe: turn off the SDK's "pre-allocated" peer connection. With it on,
+          // the SDK opens a connection early and then calls setConfiguration() on it,
+          // which Chrome on Android rejected with InvalidModificationError, so no audio
+          // flowed. Without it the SDK connects once, with its final settings.
+          (
+            AgoraRTC as unknown as {
+              setParameter?: (key: string, value: unknown) => void;
+            }
+          ).setParameter?.('ENABLE_PREALLOC_PC', false);
           clientRef.current = AgoraRTC.createClient({
             mode: 'rtc',
             codec: 'vp8',
@@ -54,7 +64,7 @@ const AgoraProvider = dynamic(
   { ssr: false },
 );
 
-export default function LandingPage() {
+export default function LandingPage({ context = {} }: { context?: VoiceContext }) {
   const [showConversation, setShowConversation] = useState(false);
 
   // Preload heavy modules on mount so they're already cached when the user
@@ -98,6 +108,7 @@ export default function LandingPage() {
           body: JSON.stringify({
             requester_id: responseData.uid,
             channel_name: responseData.channel,
+            ...context,
           } as ClientStartRequest),
         })
           .then(async (res) => {
@@ -223,6 +234,7 @@ export default function LandingPage() {
               isLoading={isLoading}
               error={error}
               onStartConversation={handleStartConversation}
+              context={context}
             />
           ) : agoraData && rtmClient ? (
             <>

@@ -54,14 +54,16 @@ function requireEnv(name: string): string {
 // TTS: Murf Falcon (BYOK) when NEXT_MURF_API_KEY is set — required for the
 // Build with Agora hackathon. Falls back to Agora-managed MiniMax otherwise.
 // Murf params per https://docs.agora.io/en/ai/models/tts/murf
-function buildTts() {
+const MURF_LOCALE: Record<string, string> = { en: 'en-IN', hi: 'hi-IN', ml: 'ml-IN', kn: 'kn-IN', ta: 'ta-IN' };
+
+function buildTts(lang: string = 'en') {
   const murfKey = process.env.NEXT_MURF_API_KEY;
   if (murfKey) {
     return new MurfTTS({
       key: murfKey,
       model: 'FALCON', // Murf accepts FALCON and routes it to Falcon 2.1
       voiceId: process.env.NEXT_MURF_VOICE_ID || 'hi-IN-jaya', // speaks en-IN, hi, ml, kn, ta
-      locale: process.env.NEXT_MURF_LOCALE || 'en-IN',
+      locale: MURF_LOCALE[lang] ?? process.env.NEXT_MURF_LOCALE ?? 'en-IN',
       sampleRate: 24000,
     });
   }
@@ -83,15 +85,42 @@ function sunoSafeLlmConfigured(): boolean {
   return Boolean(process.env.NEXT_SUNOSAFE_LLM_URL && process.env.NEXT_SUNOSAFE_LLM_KEY);
 }
 
-function buildLlm(channelName: string) {
+type Lang = 'en' | 'hi' | 'ml' | 'kn' | 'ta';
+const LANGS: Lang[] = ['en', 'hi', 'ml', 'kn', 'ta'];
+const BACKEND = (process.env.SUNOSAFE_BACKEND_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
+
+type VoicePlan = { incident?: number; mode: 'guard' | 'drill'; lang: Lang; greeting: string };
+
+/** Validate the optional context and fetch the opening sentence from the private backend. */
+async function planVoice(body: ClientStartRequest): Promise<VoicePlan> {
+  const lang: Lang = LANGS.includes(body.lang as Lang) ? (body.lang as Lang) : 'en';
+  const mode = body.mode === 'drill' ? 'drill' : 'guard';
+  const incident = Number.isInteger(body.incident_id) && (body.incident_id ?? 0) > 0 ? body.incident_id : undefined;
+  let greeting = lang === 'hi' ? 'नमस्ते, मैं सुनोसेफ़ हूँ। आप मुझसे किसी संदेश, लिंक या कॉल के बारे में पूछ सकते हैं।' : SUNOSAFE_GREETING;
+  try {
+    const path = mode === 'drill' ? `/api/voice/drill-greeting?lang=${lang}`
+      : incident ? `/api/incidents/${incident}/voice-brief?lang=${lang}` : null;
+    if (path) {
+      const r = await fetch(BACKEND + path, { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+      if (r.ok) greeting = ((await r.json()) as { greeting: string }).greeting.slice(0, 600);
+    }
+  } catch {
+    /* keep the plain greeting: the agent can still investigate on request */
+  }
+  return { incident, mode, lang, greeting };
+}
+
+function buildLlm(channelName: string, plan: VoicePlan) {
   if (sunoSafeLlmConfigured()) {
     // One SunoSafe session per call, so approvals and case notes never mix between calls.
     const session = channelName.replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 64);
+    const query = new URLSearchParams({ session, mode: plan.mode, lang: plan.lang });
+    if (plan.incident) query.set('incident', String(plan.incident));
     return new OpenAI({
       apiKey: requireEnv('NEXT_SUNOSAFE_LLM_KEY'),
-      url: `${requireEnv('NEXT_SUNOSAFE_LLM_URL')}?session=${session}`,
+      url: `${requireEnv('NEXT_SUNOSAFE_LLM_URL')}?${query.toString()}`,
       model: 'sunosafe-agent',
-      greetingMessage: SUNOSAFE_GREETING,
+      greetingMessage: plan.greeting,
       failureMessage: 'Sorry, I could not check that. Please try again.',
       maxHistory: 15,
     });
@@ -115,6 +144,7 @@ export async function POST(request: NextRequest) {
 
     const body: ClientStartRequest = await request.json();
     const { requester_id, channel_name } = body;
+    const plan = await planVoice(body);
 
     // Validate required env vars on first request so misconfiguration surfaces
     // with a clear error message rather than a silent failure.
@@ -145,7 +175,7 @@ export async function POST(request: NextRequest) {
       // With the SunoSafe LLM, the real instructions live in the SunoSafe backend
       // (it ignores system messages sent from here, so they cannot be tampered with).
       instructions: sunoSafeLlmConfigured() ? 'You are SunoSafe.' : ADA_PROMPT,
-      greeting: sunoSafeLlmConfigured() ? SUNOSAFE_GREETING : GREETING,
+      greeting: sunoSafeLlmConfigured() ? plan.greeting : GREETING,
       failureMessage: 'Please wait a moment.',
       maxHistory: 50,
       // VAD controls how the agent detects the start and end of a user's turn.
@@ -185,7 +215,8 @@ export async function POST(request: NextRequest) {
       .withStt(
         new DeepgramSTT({
           model: 'nova-3',
-          language: 'en',
+          // Listening: Hindi or English. Malayalam, Kannada and Tamil listening is not enabled yet.
+          language: plan.lang === 'hi' ? 'hi' : 'en',
         }),
         // BYOK: uncomment the following block and set NEXT_DEEPGRAM_API_KEY
         // new DeepgramSTT({
@@ -195,7 +226,7 @@ export async function POST(request: NextRequest) {
         // }),
       )
       .withLlm(
-        buildLlm(channel_name),
+        buildLlm(channel_name, plan),
         // BYOK: uncomment the following block and set NEXT_LLM_API_KEY and NEXT_LLM_URL
         // new OpenAI({
         //   apiKey: requireEnv('NEXT_LLM_API_KEY'),
@@ -210,7 +241,7 @@ export async function POST(request: NextRequest) {
         // }),
       )
       .withTts(
-        buildTts(),
+        buildTts(plan.lang),
         // BYOK — ElevenLabs (set NEXT_ELEVENLABS_API_KEY; optional NEXT_ELEVENLABS_VOICE_ID)
         // new (await import('agora-agents')).ElevenLabsTTS({
         //   key: requireEnv('NEXT_ELEVENLABS_API_KEY'),

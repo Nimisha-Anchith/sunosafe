@@ -24,7 +24,7 @@
     "agora-agent-uikit": "1.1.0",
     "agora-agents": "^2.9.0",
     "agora-rtc-react": "^2.5.1",
-    "agora-rtc-sdk-ng": "^4.24.3",
+    "agora-rtc-sdk-ng": "^4.24.10",
     "agora-rtm": "^2.2.3",
     "agora-token": "^2.0.5",
     "ai": "^6.0.107",

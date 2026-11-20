@@ -10,7 +10,15 @@ export interface AgoraTokenData {
 export interface ClientStartRequest {
   requester_id: string;
   channel_name: string;
+  /** SunoSafe: incident the user opened the voice agent from (gives it context). */
+  incident_id?: number;
+  /** SunoSafe: 'guard' (normal) or 'drill' (scam practice). */
+  mode?: 'guard' | 'drill';
+  /** SunoSafe: preferred language for replies and voice. */
+  lang?: 'en' | 'hi' | 'ml' | 'kn' | 'ta';
 }
+
+export type VoiceContext = Pick<ClientStartRequest, 'incident_id' | 'mode' | 'lang'>;
 
 export interface StopConversationRequest {
   agent_id: string;

@@ -172,6 +172,12 @@ class Store:
         return self._all("SELECT kind, value FROM incident_indicators WHERE incident_id=? ORDER BY kind, value",
                          (incident_id,))
 
+    def events_with_indicator(self, kind: str, value: str, since: str) -> list[dict]:
+        """Events since `since` that carry this indicator (newest first)."""
+        return self._all(
+            "SELECT e.* FROM events e JOIN indicators i ON i.event_id=e.id "
+            "WHERE i.kind=? AND i.value=? AND e.ts >= ? ORDER BY e.id DESC LIMIT 20", (kind, value, since))
+
     def find_open_incidents(self, indicators: list[tuple[str, str]], since: str) -> list[dict]:
         """Open incidents updated since `since` that share at least one indicator."""
         if not indicators:

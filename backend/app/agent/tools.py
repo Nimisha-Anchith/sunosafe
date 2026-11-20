@@ -29,7 +29,7 @@ TOOLS: list[dict] = [
         "Check a suspicious SMS/WhatsApp message and investigate any links in it. Call with no text to check "
         "the message the user most recently shared or pasted in the app.",
         {"text": {"type": "string", "description": "Only if the user dictated the message aloud."}}),
-    _fn("check_link", "Investigate one web link (redirects, domain age, certificate, reputation).",
+    _fn("investigate_url", "Investigate one web link (redirects, domain age, certificate, reputation).",
         {"url": {"type": "string"}}, ["url"]),
     _fn("block_link",
         "Ask SunoSafe to block a link that was already investigated. SunoSafe decides whether the user has "
@@ -44,13 +44,17 @@ TOOLS: list[dict] = [
     _fn("report_call", "The user describes a suspicious phone call.",
         {"description": {"type": "string"}, "caller_number": {"type": "string"},
          "asked_for": {"type": "array", "items": {"type": "string", "enum": _ASKED}}}, ["description"]),
-    _fn("recovery_steps", "List the recovery steps for the current incident and their status."),
-    _fn("mark_step", "Record that the user completed or skipped a recovery step.",
+    _fn("check_caller_risk", "Check what SunoSafe already knows about a phone number (read-only).",
+        {"number": {"type": "string"}}, ["number"]),
+    _fn("get_incident_details", "Evidence for the current incident: why it was flagged, timeline and steps."),
+    _fn("get_security_timeline", "The most recent security events on this phone, in SunoSafe's own words."),
+    _fn("recommend_protective_action", "List the recovery steps for the current incident and their status."),
+    _fn("record_user_action", "Record that the user completed or skipped a recovery step.",
         {"code": {"type": "string"}, "status": {"type": "string", "enum": ["done", "skipped"]}},
         ["code", "status"]),
 ]
 
-SLOW_TOOLS = {"analyze_message", "check_link"}   # network checks: speak a short filler first
+SLOW_TOOLS = {"analyze_message", "investigate_url", "check_link"}   # network checks: speak a short filler first
 INBOX_TTL = timedelta(minutes=10)                # a shared message is only "the latest" for this long
 
 
@@ -139,7 +143,16 @@ class ToolRunner:
         return view
 
     def _t_check_link(self, args: dict) -> dict:
-        out = self.svc.check_link(str(args["url"])[:2048])
+        raw = str(args["url"])[:2048]
+        # A website already investigated in this conversation is not investigated again:
+        # the model only sees website names, and re-checking a bare name would create a
+        # second, different "link" and could lead to blocking the wrong address.
+        asked = _host(raw if "://" in raw else f"https://{raw}")
+        for label, url in self.session.links.items():
+            if asked and _host(url) == asked:
+                return {"already_investigated": True, "link": label, "website": asked,
+                        "note": "Use the evidence in CASE NOTES. To block it, call block_link with this link label."}
+        out = self.svc.check_link(raw)
         return self._remember(out, [out["link"]])
 
     def _t_block_link(self, args: dict) -> dict:
@@ -178,6 +191,30 @@ class ToolRunner:
             self.session.incident_id = out["incident_id"]
         return {"verdict": _verdict_view(out["verdict"]), "incident_id": out["incident_id"]}
 
+    def _t_investigate_url(self, args: dict) -> dict:
+        return self._t_check_link(args)
+
+    def _t_check_caller_risk(self, args: dict) -> dict:
+        out = self.svc.caller_risk(str(args.get("number", ""))[:20])
+        return {k: out[k] for k in ("risk", "number_known", "reason")}
+
+    def _t_get_incident_details(self, args: dict) -> dict:
+        if not self.session.incident_id:
+            return {"error": "no_incident"}
+        brief = self.svc.incident_brief(self.session.incident_id)
+        return brief or {"error": "no_incident"}
+
+    def _t_get_security_timeline(self, args: dict) -> dict:
+        events = self.svc.store.recent_events(12)
+        return {"events": [f"{e['ts'][:16].replace('T', ' ')} {self.svc.safe_event_label(e)}"
+                           for e in reversed(events)]}
+
+    def _t_recommend_protective_action(self, args: dict) -> dict:
+        return self._t_recovery_steps(args)
+
+    def _t_record_user_action(self, args: dict) -> dict:
+        return self._t_mark_step(args)
+
     def _t_recovery_steps(self, args: dict) -> dict:
         if not self.session.incident_id:
             return {"error": "no_incident"}
@@ -189,3 +226,33 @@ class ToolRunner:
             return {"error": "no_incident"}
         out = self.svc.update_step(self.session.incident_id, str(args["code"]), str(args["status"]), "voice")
         return {"ok": True, "incident_status": out["incident"]["status"]}
+
+
+def seed_session_from_incident(svc: SunoSafeService, session: Session, incident_id: int) -> bool:
+    """Load an incident's evidence into a fresh voice session.
+
+    Links that SunoSafe's own tools investigated become "link 1", "link 2" ...,
+    so the user can say "block it" and the policy gate can still check that the
+    target was really investigated. Only our own summaries go to the LLM.
+    """
+    if session.seeded:
+        return False
+    session.seeded = True
+    detail = svc.incident_detail(incident_id)
+    if detail is None:
+        return False
+    session.incident_id = incident_id
+    links = []
+    for ev in detail["events"]:
+        if ev["type"] != "url_investigated":
+            continue
+        start = ev["data"].get("url")
+        for url in (start, ev["data"].get("final_url")):
+            if url:
+                session.investigated.add(url)
+        if start and start not in session.links.values():
+            label = f"link {len(session.links) + 1}"
+            session.links[label] = start
+            links.append({"link": label, "website": _host(start)})
+    session.case_notes = {**(svc.incident_brief(incident_id) or {}), "links": links}
+    return True

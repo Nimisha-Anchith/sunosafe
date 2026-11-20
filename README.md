@@ -18,6 +18,23 @@ Detect → Investigate → Explain → Protect → Respond → Follow up
 
 ---
 
+## ✨ What makes SunoSafe different: Intervention Intelligence
+
+Most scam apps check one message at a time. Indian scams usually come in **two steps**: a fake bank/KYC SMS with a link,
+then a call from "the bank" asking for the OTP. SunoSafe connects them:
+
+1. The **Android companion** sees the SMS notification (only after you allow it), and only messages with a link or scam
+   wording leave the phone.
+2. The backend investigates the link and records evidence in the **mini-SIEM**.
+3. When **the number from that SMS calls you**, SunoSafe recognises it **while the phone is still ringing** and warns
+   you aloud, in English or Hindi.
+4. The SMS and the call are joined into **one incident** (same number, or the same impersonated bank), and the severity
+   rises with the reason shown: *"the same scam reached you by message and by phone call"*.
+5. Tap the warning and the **Agora voice agent (Murf Falcon voice)** opens already briefed on the evidence. Say
+   *"Yes, block it"* and it acts, with the approval recorded in the incident's audit trail.
+
+Setup, run commands and the demo script: [docs/demo-and-setup.md](docs/demo-and-setup.md).
+
 ## 🚨 The Problem & Technology Gap
 
 1. **Accessibility blind spot.** Security tools rely on dense dashboards, tiny browser padlocks and English warnings that elderly and visually impaired users cannot read or interpret.

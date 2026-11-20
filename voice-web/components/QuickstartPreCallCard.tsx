@@ -7,13 +7,23 @@ type QuickstartPreCallCardProps = {
   isLoading: boolean;
   error: string | null;
   onStartConversation: () => void;
+  context?: { incident_id?: number; mode?: 'guard' | 'drill'; lang?: string };
 };
 
 export function QuickstartPreCallCard({
   isLoading,
   error,
   onStartConversation,
+  context = {},
 }: QuickstartPreCallCardProps) {
+  const heading = context.mode === 'drill'
+    ? 'Scam call practice'
+    : context.incident_id ? 'SunoSafe has a warning for you' : 'Talk to SunoSafe';
+  const sub = context.mode === 'drill'
+    ? 'SunoSafe will pretend to be a scam caller so you can practise saying no. Never say real details.'
+    : context.incident_id
+      ? 'Tap to hear what SunoSafe found, ask why, and decide what to do.'
+      : 'Ask about a message, a link or a call that worries you. Powered by Agora Conversational AI and Murf Falcon.';
   return (
     <div
       className="mx-auto flex w-[min(92vw,26.25rem)] animate-fade-up flex-col items-center rounded-[20px] border border-[#2b2b2b] px-10 py-10 text-center shadow-[0_10px_24px_rgba(0,0,0,0.28)]"
@@ -23,17 +33,16 @@ export function QuickstartPreCallCard({
       }}
     >
       <h1 className="text-[28px] font-medium leading-[1.2] text-white">
-        Try Agora&apos;s Voice Agent
+        {heading}
       </h1>
       <p className="mt-[14px] text-sm font-medium leading-6 text-muted-foreground">
-        Built on Agora&apos;s flagship Conversational AI engine, for effortless
-        agentic conversations.
+        {sub}
       </p>
 
       <Button
         onClick={onStartConversation}
         disabled={isLoading}
-        className="mt-12 h-10 w-full rounded-lg border border-primary bg-primary text-sm font-medium text-black hover:border-white hover:bg-white hover:text-black disabled:hover:border-primary disabled:hover:bg-primary disabled:hover:text-black"
+        className="mt-10 h-14 w-full text-base rounded-lg border border-primary bg-primary text-sm font-medium text-black hover:border-white hover:bg-white hover:text-black disabled:hover:border-primary disabled:hover:bg-primary disabled:hover:text-black"
         aria-label={
           isLoading
             ? 'Starting conversation with AI agent'
@@ -46,7 +55,7 @@ export function QuickstartPreCallCard({
             Starting...
           </>
         ) : (
-          'Start Conversation'
+          'Start talking'
         )}
       </Button>
       {error && <p className="mt-3 text-xs text-destructive">{error}</p>}

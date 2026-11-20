@@ -6,6 +6,8 @@ const rootDir = dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  // The phone reaches the dev server through a Cloudflare quick tunnel.
+  allowedDevOrigins: ['*.trycloudflare.com'],
   images: {
     unoptimized: true,
   },

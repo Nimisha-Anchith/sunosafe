@@ -24,6 +24,8 @@ SECRET_REQUESTS = {"requests_otp", "requests_upi_pin", "requests_credentials", "
 PRESSURE = {"urgency", "account_threat", "authority_threat", "kyc_update_request", "too_good_to_be_true",
             "electricity_disconnection", "asks_to_call_number", "asks_for_payment"}
 CONFIRMED = {"known_dangerous_site"}
+# Evidence that links a phone call to an earlier scam message (cross-channel).
+CROSS_CHANNEL = {"known_scam_number", "same_scam_story_by_call"}
 STRONG_LINK = {"domain_recently_registered", "link_to_internal_address", "redirect_to_internal_address",
                "punycode_domain", "userinfo_in_url", "obfuscated_ip_host", "redirect_to_app_or_payment_link",
                "contains_upi_payment_link", "link_not_official_for_brand"}
@@ -100,6 +102,13 @@ def assess(codes: set[str], disclosures: set[str] | None = None,
              "It asks for an OTP, PIN, password or remote access. Genuine organisations never do this.", secrets)
     if strong:
         fire("R7_strong_link_warning", "medium", "The link shows serious warning signs.", strong)
+    if "known_scam_number" in codes:
+        fire("R10_caller_from_scam_message", "high",
+             "This caller's number appeared in a scam message you received earlier.", ["known_scam_number"])
+    if "same_scam_story_by_call" in codes:
+        fire("R11_same_scam_by_message_and_call", "high",
+             "The same scam reached you by message and by a phone call, a common two-step trick.",
+             ["same_scam_story_by_call"])
     if len(pressure) >= 2:
         fire("R8_multiple_pressure_tactics", "low", "It uses several pressure tactics.", pressure)
     elif pressure or weak:

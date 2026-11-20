@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="SunoTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">#134E4A</item>
+        <item name="android:colorAccent">#134E4A</item>
+        <item name="android:statusBarColor">#134E4A</item>
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+</resources>

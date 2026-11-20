@@ -25,6 +25,7 @@ from app.security.investigate import Toolkit, URLInvestigation, investigate_url
 from app.security.message_rules import BRANDS, MessageAnalysis, analyze_message
 from app.security.rdap import registrable_domain
 from app.security.url_normalize import URL_SHORTENERS, URLNormalizeError, normalize_url
+from app.soc import phrases
 from app.soc.redact import redact
 from app.soc.severity import LEVELS, Verdict, assess
 from app.soc.store import Store
@@ -46,6 +47,9 @@ STEP_LIBRARY: dict[str, tuple[str, str, bool]] = {
                      "Do not click the link, call the number in the message, or reply.", False),
     "block_link": ("Block the link in SunoSafe",
                    "SunoSafe's protected browser will refuse to open it. Needs your approval.", True),
+    "hang_up_call_back": ("Hang up and call back on the official number",
+                          "Never act on what the caller says. Call the bank or office yourself, using the number "
+                          "on your card or their official website. Real officials never ask for OTP or PIN.", False),
     "report_chakshu": ("Report it on Sanchar Saathi (Chakshu)",
                        "Report suspected fraud messages and calls at sancharsaathi.gov.in under Chakshu.", False),
     "call_1930": ("Call 1930 now",
@@ -98,6 +102,8 @@ def _tool_problems(invs: list[URLInvestigation]) -> list[str]:
                 problems.append(f"The {run.tool} check failed, so its evidence is missing.")
             elif run.status == "not_configured" and run.tool == "reputation":
                 problems.append("Google Safe Browsing is not configured, so known-scam lists were not checked.")
+        if inv.tls is not None and inv.tls.status == "unreachable":
+            problems.append("The website did not respond, so its security certificate could not be checked.")
     return list(dict.fromkeys(problems))
 
 
@@ -167,20 +173,41 @@ class SunoSafeService:
             disclosed |= set(ev["data"].get("disclosed", []))
         return codes, disclosed
 
+    def _incident_channels(self, incident_id: int) -> set[str]:
+        """Which channels contributed suspicious (medium+) evidence to this incident."""
+        kinds = {"message_analysed": "message", "call_reported": "call", "call_screened": "call"}
+        out = set()
+        for ev in self.store.events_for_incident(incident_id):
+            if ev["type"] in kinds and ev["level"] and LEVELS.index(ev["level"]) >= LEVELS.index("medium"):
+                out.add(kinds[ev["type"]])
+        return out
+
     def _correlate(self, event_ids: list[int], indicators: list[tuple[str, str]], verdict: Verdict,
                    title: str, kind: str, steps: list[str], force_incident: bool = False,
                    incident_id: int | None = None) -> int | None:
         ts = self._ts()
         since = (self.clock() - CORRELATION_WINDOW).isoformat(timespec="seconds")
         strong = [(k, v) for k, v in indicators if k in CORRELATE_KINDS]
+        # C2 (impersonation story): a claimed brand links events only when THIS event is
+        # itself suspicious, so genuine messages from a real bank never join a scam incident.
+        if LEVELS.index(verdict.level) >= LEVELS.index("medium"):
+            strong += [(k, v) for k, v in indicators if k == "brand"]
         rationale_entry = None
         if incident_id is None:
             matches = self.store.find_open_incidents(strong, since)
+            # Prefer hard evidence (same number / link / domain) over a shared brand claim.
+            matches.sort(key=lambda m: m["kind"] == "brand")
             if matches:
-                incident_id = matches[0]["id"]
-                rationale_entry = {"ts": ts, "rule": "C1_shared_indicator",
-                                   "text": f"Linked because it shares {matches[0]['kind']} "
-                                           f"{matches[0]['value']} with this incident."}
+                m = matches[0]
+                incident_id = m["id"]
+                if m["kind"] == "brand":
+                    name = BRANDS[m["value"]].name if m["value"] in BRANDS else m["value"]
+                    rationale_entry = {"ts": ts, "rule": "C2_same_impersonation_story",
+                                       "text": f"Linked as one impersonation story: both claim to be {name}."}
+                else:
+                    shown = redact(m["value"]) if m["kind"] == "phone" else m["value"]
+                    rationale_entry = {"ts": ts, "rule": "C1_shared_indicator",
+                                       "text": f"Linked because it shares {m['kind']} {shown} with this incident."}
         if incident_id is None:
             if not force_incident and LEVELS.index(verdict.level) < LEVELS.index("medium"):
                 return None
@@ -195,6 +222,14 @@ class SunoSafeService:
 
         incident = self.store.get_incident(incident_id)
         codes, disclosed = self._incident_codes(incident_id)
+        # C3 (cross-channel): the same incident holds both a suspicious message and a
+        # suspicious call. That two-step pattern is itself evidence.
+        channels = self._incident_channels(incident_id)
+        if {"message", "call"} <= channels and "same_scam_story_by_call" not in codes:
+            codes.add("same_scam_story_by_call")
+            self.store.add_event(ts, "correlation_cross_channel", "correlation",
+                                 "The same scam reached you by message and by phone call",
+                                 {"codes": ["same_scam_story_by_call"]}, "high", incident_id)
         combined = assess(codes, disclosed)
         new_level = max(incident["severity"], combined.level, verdict.level, key=LEVELS.index)
         rationale = incident["rationale"]
@@ -256,6 +291,8 @@ class SunoSafeService:
             "signals": [asdict(s) for s in analysis.signals],
             "links": [_compact(i) for i in invs],
             "links_not_checked": analysis.web_urls[MAX_LINKS_PER_MESSAGE:],
+            "phone_numbers": analysis.phone_numbers,
+            "brands": analysis.brands,
         }
 
     def check_link(self, url: str, source: str = "app") -> dict:
@@ -280,13 +317,105 @@ class SunoSafeService:
         verdict = assess(codes)
         indicators = [("phone", number)] if number else []
         indicators += _link_indicators(analysis.web_urls) + [("phone", p) for p in analysis.phone_numbers]
+        indicators += [("brand", b) for b in analysis.brands]
         ev = self.store.add_event(self._ts(), "call_reported", "user_report",
                                   f"User reported a suspicious call{' from ' + redact(number) if number else ''}",
                                   {"description": redact(description)[:2000], "asked_for": asked_for,
                                    "codes": sorted(codes)}, verdict.level, indicators=indicators)
-        incident_id = self._correlate([ev], indicators, verdict, "Suspicious phone call", "suspicious_call",
-                                      ["report_chakshu"])
+        brand = BRANDS[analysis.brands[0]].name if analysis.brands else None
+        title = f"Suspicious call claiming to be {brand}" if brand else "Suspicious phone call"
+        incident_id = self._correlate([ev], indicators, verdict, title, "suspicious_call",
+                                      ["hang_up_call_back", "report_chakshu"])
         return {"event_id": ev, "incident_id": incident_id, "verdict": asdict(verdict)}
+
+    # ------------------------------------------------------------------ callers
+    def caller_risk(self, raw_number: str | None) -> dict:
+        """Read-only: what does SunoSafe already know about this number? Records nothing."""
+        number = normalize_caller_number(raw_number) if raw_number else None
+        if not number:
+            return {"number_known": False, "risk": "unknown",
+                    "reason": "The number is hidden or not valid, so it cannot be checked."}
+        since = (self.clock() - CORRELATION_WINDOW).isoformat(timespec="seconds")
+        hits = [e for e in self.store.events_with_indicator("phone", number, since)
+                if e["level"] and LEVELS.index(e["level"]) >= LEVELS.index("medium")]
+        if hits:
+            first = hits[-1]
+            where = {"message_analysed": "a suspicious message", "call_reported": "a call you reported",
+                     "call_screened": "an earlier suspicious call"}.get(first["type"], "a suspicious event")
+            return {"number_known": True, "risk": "high", "incident_id": first["incident_id"],
+                    "reason": f"This number appeared in {where} on {first['ts'][:16].replace('T', ' ')}."}
+        intl = raw_number.strip().startswith("+") and not raw_number.strip().startswith("+91")
+        return {"number_known": False, "risk": "caution" if intl else "unknown",
+                "reason": ("International number. Be careful if the caller asks for money or codes."
+                           if intl else "SunoSafe has no information about this number.")}
+
+    def screen_call(self, raw_number: str | None) -> dict:
+        """An incoming call seen by the Android call-screening service.
+
+        Only numbers already linked to scam evidence are recorded, so ordinary
+        callers' numbers are never stored.
+        """
+        risk = self.caller_risk(raw_number)
+        if risk["risk"] != "high":
+            return {"alert": False, "level": "info", "incident_id": None, "reason": risk["reason"]}
+        number = normalize_caller_number(raw_number)
+        codes = {"known_scam_number"}
+        verdict = assess(codes)
+        indicators = [("phone", number)]
+        ev = self.store.add_event(self._ts(), "call_screened", "call_screening",
+                                  f"Incoming call from {redact(number)}, a number linked to scam evidence",
+                                  {"codes": sorted(codes), "reason": risk["reason"]}, verdict.level,
+                                  indicators=indicators)
+        incident_id = self._correlate([ev], indicators, verdict, "Call from a number seen in a scam message",
+                                      "suspicious_call", ["hang_up_call_back", "report_chakshu"])
+        return {"alert": True, "level": "high", "incident_id": incident_id, "reason": risk["reason"]}
+
+    # ------------------------------------------------------------------ voice context
+    @staticmethod
+    def safe_event_label(ev: dict) -> str:
+        """Describe an event using only our own words (never attacker-written text or paths)."""
+        data, t = ev.get("data", {}), ev["type"]
+        def host(u):
+            try:
+                return normalize_url(u).host if u else "a website"
+            except URLNormalizeError:
+                return "a website"
+        labels = {
+            "message_analysed": lambda: f"A suspicious message was checked ({ev['level']}).",
+            "url_investigated": lambda: f"Its link to {host(data.get('url'))} was investigated.",
+            "call_reported": lambda: "You reported a suspicious phone call.",
+            "call_screened": lambda: "A call came from a number that appeared in the scam message.",
+            "correlation_cross_channel": lambda: "The same scam reached you by message and by phone call.",
+            "remediation_completed": lambda: f"You approved blocking it ({data.get('approved_via', 'app')}).",
+            "protected_browser_block": lambda: "SunoSafe stopped an attempt to open the blocked website.",
+            "user_reported_scam": lambda: "You reported that details may have been shared.",
+            "step_updated": lambda: f"A recovery step was marked {data.get('status', 'updated')}.",
+            "incident_created": lambda: "SunoSafe opened this incident.",
+            "incident_updated": lambda: f"Severity was raised to {data.get('to', 'higher')}.",
+        }
+        return labels.get(t, lambda: "A related security event was recorded.")()
+
+    def incident_brief(self, incident_id: int) -> dict | None:
+        """Evidence summary safe to give the voice agent: our own wording, masked, no raw text."""
+        d = self.incident_detail(incident_id)
+        if d is None:
+            return None
+        return {
+            "incident": d["title"], "severity": d["severity"], "status": d["status"],
+            "why": [r["text"] for r in d["rationale"] if r.get("text")][:6],
+            "timeline": [f"{e['ts'][11:16]} {self.safe_event_label(e)}" for e in d["events"]][-10:],
+            "steps": [f"{s['title']} ({s['status']})" for s in d["steps"]],
+        }
+
+    def voice_brief(self, incident_id: int, lang: str = "en") -> str | None:
+        """The first sentence the voice agent speaks when opened from a warning."""
+        d = self.incident_detail(incident_id)
+        if d is None:
+            return None
+        channels = self._incident_channels(incident_id)
+        brand = next((BRANDS[i["value"]].name for i in d["indicators"]
+                      if i["kind"] == "brand" and i["value"] in BRANDS), None)
+        return phrases.voice_greeting(lang, d["severity"], brand, "call" in channels and "message" in channels)
 
     def report_scam(self, description: str, disclosed: list[str], amount_lost: float | None = None,
                     incident_id: int | None = None) -> dict:

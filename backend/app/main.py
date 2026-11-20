@@ -28,6 +28,8 @@ from pydantic import BaseModel, Field
 from app.agent.core import run_turn
 from app.agent.llm_client import make_llm
 from app.agent.policy_gate import Sessions
+from app.agent.tools import seed_session_from_incident
+from app.soc import phrases
 from app.config import get_settings
 from app.security.investigate import default_toolkit, investigate_url
 from app.soc.service import SunoSafeService
@@ -244,6 +246,20 @@ def incident_summary(incident_id: int, svc: SunoSafeService = Depends(get_servic
     return text
 
 
+@app.get("/api/incidents/{incident_id}/voice-brief", dependencies=Guarded)
+def incident_voice_brief(incident_id: int, lang: str = "en", svc: SunoSafeService = Depends(get_service)) -> dict:
+    """Opening sentence for the voice agent when it is started from a warning."""
+    text = svc.voice_brief(incident_id, phrases.lang_or_default(lang))
+    if text is None:
+        raise HTTPException(status_code=404, detail="Incident not found.")
+    return {"greeting": text}
+
+
+@app.get("/api/voice/drill-greeting", dependencies=Guarded)
+def drill_greeting(lang: str = "en") -> dict:
+    return {"greeting": phrases.drill_greeting(phrases.lang_or_default(lang))}
+
+
 @app.patch("/api/incidents/{incident_id}/steps/{code}", dependencies=Guarded)
 def update_step(incident_id: int, code: str, req: StepIn, svc: SunoSafeService = Depends(get_service)) -> dict:
     return _errors(svc.update_step, incident_id, code, req.status, req.actor)
@@ -298,8 +314,8 @@ def _chunk(text: str | None, finish: str | None = None) -> str:
 
 
 @app.post("/llm/chat/completions", dependencies=[*Guarded, Depends(rate_limited)])
-def llm_chat(req: ChatIn, session: str = "default", svc: SunoSafeService = Depends(get_service),
-             llm=Depends(get_llm)):
+def llm_chat(req: ChatIn, session: str = "default", incident: int | None = None, mode: str = "guard",
+             lang: str = "en", svc: SunoSafeService = Depends(get_service), llm=Depends(get_llm)):
     """Custom-LLM endpoint for Agora Conversational AI.
 
     Agora sends the conversation here; we run SunoSafe's tools ourselves and
@@ -307,8 +323,14 @@ def llm_chat(req: ChatIn, session: str = "default", svc: SunoSafeService = Depen
     """
     if not _SESSION_ID.match(session):
         raise HTTPException(status_code=422, detail="bad session id")
+    if mode not in ("guard", "drill") or lang not in phrases.SUPPORTED or (incident is not None and incident < 1):
+        raise HTTPException(status_code=422, detail="bad parameters")
     now = datetime.now(UTC)
-    pieces = run_turn(req.messages, llm, svc, SESSIONS.get(session, now), now, _load_inbox(svc))
+    state = SESSIONS.get(session, now)
+    state.mode, state.lang = mode, lang
+    if incident is not None and mode == "guard":
+        seed_session_from_incident(svc, state, incident)
+    pieces = run_turn(req.messages, llm, svc, state, now, _load_inbox(svc))
     if not req.stream:
         return {"id": "chatcmpl-sunosafe", "object": "chat.completion", "created": int(time.time()),
                 "model": "sunosafe-agent",
