@@ -41,6 +41,8 @@ class Settings:
     llm_models: tuple[str, ...] = ("gemini-3.5-flash-lite", "gemini-flash-lite-latest")
     gateway_token: str | None = None    # token for the public voice gateway only (port 8001)
     device_token: str | None = None     # token for the paired Android companion only
+    murf_api_key: str | None = None     # spoken warnings (Murf Falcon); never leaves the backend
+    murf_voice: str = "hi-IN-jaya"
 
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
@@ -75,6 +77,8 @@ def get_settings() -> Settings:
         db_path=os.environ.get("SUNOSAFE_DB") or str(DEFAULT_DB),
         gateway_token=os.environ.get("GATEWAY_TOKEN") or None,
         device_token=os.environ.get("DEVICE_TOKEN") or None,
+        murf_api_key=os.environ.get("MURF_API_KEY") or None,
+        murf_voice=os.environ.get("MURF_VOICE_ID") or "hi-IN-jaya",
         llm_api_key=llm_key,
         llm_base_url=llm_url,
         llm_models=tuple(m.strip() for m in (os.environ.get("LLM_MODELS") or llm_default_models).split(",")

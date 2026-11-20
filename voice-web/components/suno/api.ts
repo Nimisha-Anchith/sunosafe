@@ -92,7 +92,7 @@ export type Settings = { shield: boolean; vibrate: boolean; textSize: 'normal' |
 export const DEFAULT_SETTINGS: Settings = { shield: true, vibrate: true, textSize: 'large', lang: 'en' };
 
 /** Address of the voice agent, optionally briefed on an incident. */
-export function talkUrl(settings: Settings, incidentId?: number | null, mode?: 'drill'): string {
+export function talkUrl(settings: Settings, incidentId?: number | null, mode?: 'drill' | 'shield'): string {
   const q = new URLSearchParams({ lang: settings.lang });
   if (incidentId) q.set('incident', String(incidentId));
   if (mode) q.set('mode', mode);

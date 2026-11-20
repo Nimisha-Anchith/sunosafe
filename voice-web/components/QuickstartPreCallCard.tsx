@@ -7,7 +7,7 @@ type QuickstartPreCallCardProps = {
   isLoading: boolean;
   error: string | null;
   onStartConversation: () => void;
-  context?: { incident_id?: number; mode?: 'guard' | 'drill'; lang?: string };
+  context?: { incident_id?: number; mode?: 'guard' | 'drill' | 'shield'; lang?: string };
 };
 
 export function QuickstartPreCallCard({
@@ -16,10 +16,14 @@ export function QuickstartPreCallCard({
   onStartConversation,
   context = {},
 }: QuickstartPreCallCardProps) {
-  const heading = context.mode === 'drill'
+  const heading = context.mode === 'shield'
+    ? 'Call shield test'
+    : context.mode === 'drill'
     ? 'Scam call practice'
     : context.incident_id ? 'SunoSafe has a warning for you' : 'Talk to SunoSafe';
-  const sub = context.mode === 'drill'
+  const sub = context.mode === 'shield'
+    ? 'You play the caller. SunoSafe answers as it would a forwarded call, screens what you say, and warns the phone if it sounds like a scam. Use only made-up details.'
+    : context.mode === 'drill'
     ? 'SunoSafe will pretend to be a scam caller so you can practise saying no. Never say real details.'
     : context.incident_id
       ? 'Tap to hear what SunoSafe found, ask why, and decide what to do.'

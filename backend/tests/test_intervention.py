@@ -93,7 +93,7 @@ def test_device_call_route(client):
     body = {"number": "+919876543210", "device_id": "phone-1234abcd", "lang": "hi"}
     assert client.post("/device/calls", json=body).status_code == 401
     out = client.post("/device/calls", json=body, headers=DEVICE).json()
-    assert out["alert"] is True and "सावधान" in out["say"]
+    assert out["alert"] is True and "सावधान" in out["say"] and out["say_en"].startswith("Careful")
     quiet = client.post("/device/calls", json={**body, "number": ""}, headers=DEVICE).json()
     assert quiet["alert"] is False and quiet["say"] == ""
     assert client.post("/device/calls", json={**body, "number": "1; DROP TABLE"}, headers=DEVICE).status_code == 422
@@ -103,6 +103,8 @@ def test_hindi_spoken_warning_for_notifications(client):
     note = {"app": "com.whatsapp", "title": "x", "text": FAKE_KYC, "device_id": "phone-1234abcd", "lang": "hi"}
     out = client.post("/device/notifications", json=note, headers=DEVICE).json()
     assert out["alert"] is True and "OTP" in out["say"] and "सावधान" in out["say"]
+    # English copy for phones with no Hindi voice installed
+    assert out["say_en"] and not any("ऀ" <= ch <= "ॿ" for ch in out["say_en"])
 
 
 # ---------------------------------------------------------------- voice context

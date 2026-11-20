@@ -20,6 +20,45 @@ const ConversationComponent = dynamic(() => import('./ConversationComponent'), {
   ssr: false,
 });
 
+// SunoSafe: Chrome on Android throws InvalidModificationError when the Agora SDK
+// calls RTCPeerConnection.setConfiguration() with fields that cannot change after the
+// connection is set up (bundlePolicy, rtcpMuxPolicy, certificates, candidate pool).
+// The error escaped as an unhandled rejection and the voice call never started.
+// This guard retries with the connection's current settings, changing only the two
+// fields that are allowed to change (ICE servers and ICE policy).
+function guardSetConfiguration() {
+  if (typeof window === 'undefined' || !window.RTCPeerConnection) return;
+  const proto = window.RTCPeerConnection.prototype as RTCPeerConnection & {
+    __sunoGuarded?: boolean;
+  };
+  if (proto.__sunoGuarded) return;
+  const original = proto.setConfiguration;
+  if (typeof original !== 'function') return;
+  proto.setConfiguration = function (
+    this: RTCPeerConnection,
+    config?: RTCConfiguration,
+  ) {
+    try {
+      return original.call(this, config);
+    } catch (e) {
+      if ((e as { name?: string })?.name !== 'InvalidModificationError') throw e;
+      const current = this.getConfiguration();
+      try {
+        return original.call(this, {
+          ...current,
+          iceServers: config?.iceServers ?? current.iceServers,
+          iceTransportPolicy:
+            config?.iceTransportPolicy ?? current.iceTransportPolicy,
+        });
+      } catch {
+        // Keep the settings the connection already has; the call can still proceed.
+        console.warn('[SunoSafe] kept existing peer-connection settings');
+      }
+    }
+  };
+  proto.__sunoGuarded = true;
+}
+
 // Dynamically import AgoraRTCProvider (browser-only).
 // The AgoraVoiceAI toolkit is initialized inside ConversationComponent after
 // the RTC join succeeds, so this wrapper only needs to provide the RTC client.
@@ -48,6 +87,7 @@ const AgoraProvider = dynamic(
               setParameter?: (key: string, value: unknown) => void;
             }
           ).setParameter?.('ENABLE_PREALLOC_PC', false);
+          guardSetConfiguration();
           clientRef.current = AgoraRTC.createClient({
             mode: 'rtc',
             codec: 'vp8',

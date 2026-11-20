@@ -260,6 +260,16 @@ def drill_greeting(lang: str = "en") -> dict:
     return {"greeting": phrases.drill_greeting(phrases.lang_or_default(lang))}
 
 
+@app.get("/api/voice/greeting", dependencies=Guarded)
+def plain_greeting(lang: str = "en") -> dict:
+    return {"greeting": phrases.plain_greeting(phrases.lang_or_default(lang))}
+
+
+@app.get("/api/voice/shield-greeting", dependencies=Guarded)
+def shield_greeting(lang: str = "en") -> dict:
+    return {"greeting": phrases.shield_greeting(phrases.lang_or_default(lang))}
+
+
 @app.patch("/api/incidents/{incident_id}/steps/{code}", dependencies=Guarded)
 def update_step(incident_id: int, code: str, req: StepIn, svc: SunoSafeService = Depends(get_service)) -> dict:
     return _errors(svc.update_step, incident_id, code, req.status, req.actor)
@@ -323,10 +333,14 @@ def llm_chat(req: ChatIn, session: str = "default", incident: int | None = None,
     """
     if not _SESSION_ID.match(session):
         raise HTTPException(status_code=422, detail="bad session id")
-    if mode not in ("guard", "drill") or lang not in phrases.SUPPORTED or (incident is not None and incident < 1):
+    if mode not in ("guard", "drill", "shield") or lang not in phrases.SUPPORTED or (incident is not None and incident < 1):
         raise HTTPException(status_code=422, detail="bad parameters")
     now = datetime.now(UTC)
     state = SESSIONS.get(session, now)
+    if mode == "shield" and sum(1 for m in req.messages if isinstance(m, dict) and m.get("role") == "user") <= 1:
+        # Agora sends no call id to a custom LLM, so a conversation with only one caller turn
+        # is treated as a new call: forget the previous call's screening state.
+        state.shield = None
     state.mode, state.lang = mode, lang
     if incident is not None and mode == "guard":
         seed_session_from_incident(svc, state, incident)

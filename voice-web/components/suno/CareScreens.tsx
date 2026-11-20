@@ -8,6 +8,7 @@ const EVENT_LABELS: Record<string, { icon: string; label: string }> = {
   url_investigated: { icon: '🔎', label: 'Link investigated' },
   call_reported: { icon: '📞', label: 'Call reported by you' },
   call_screened: { icon: '📲', label: 'Incoming call screened' },
+  call_shielded: { icon: '🛡️', label: 'SunoSafe answered a scam call' },
   correlation_cross_channel: { icon: '🧩', label: 'Linked: same scam by message and call' },
   incident_created: { icon: '📁', label: 'Incident opened' },
   incident_updated: { icon: '⬆️', label: 'Severity raised' },
@@ -407,6 +408,46 @@ function InterventionDemo({ settings, onOpenIncident }: { settings: Settings; on
   );
 }
 
+// The SunoSafe phone number (a Vobiz number linked to the Agora inbound agent). Public: it is a phone number.
+const SHIELD_NUMBER = process.env.NEXT_PUBLIC_SUNOSAFE_SHIELD_NUMBER ?? '';
+
+function CallShieldCard({ settings }: { settings: Settings }) {
+  const digits = SHIELD_NUMBER.replace(/[^\d+]/g, '');
+  return (
+    <Card className="border-2 border-[#1e3a8a] bg-gradient-to-br from-white to-[#eef2ff]">
+      <h3 className="text-[1.25em] font-extrabold">🛡️ Call shield: SunoSafe answers suspicious calls {digits ? <Tag kind="real" /> : <Tag kind="setup" />}</h3>
+      <p className="mt-1 text-[#4b5a56]">
+        Calls you decline or don&apos;t answer go to your SunoSafe number instead of voicemail. SunoSafe&apos;s call
+        assistant (Agora voice agent) answers, asks who is calling, never shares anything about you, and checks what the
+        caller says with the same scam engine. If it is a scam, your phone tells you calmly what happened, and it is added
+        to your evidence timeline, linked to any scam message from the same story.
+      </p>
+      <a href={talkUrl(settings, null, 'shield')}
+        className="mt-3 flex min-h-[3.75em] w-full items-center justify-center rounded-2xl bg-[#1e3a8a] px-5 text-center text-[1.05em] font-extrabold text-white">
+        🎤 Test it now: you play the caller
+      </a>
+      <p className="mt-1 text-[0.9em] text-[#4b5a56]">The test uses this browser instead of a phone line. Use only made-up details.</p>
+      <details className="mt-3">
+        <summary className="cursor-pointer font-bold">Set up call forwarding</summary>
+        {digits ? (
+          <ol className="mt-2 list-decimal space-y-1 pl-6">
+            <li>Your SunoSafe number: <b>{SHIELD_NUMBER}</b></li>
+            <li>On the phone, dial <code>**67*{digits}#</code> (when busy or declined) and <code>**61*{digits}#</code> (when not answered), then press call.</li>
+            <li>Or on Samsung: Phone → ⋮ → Settings → Supplementary services → Call forwarding → Voice call.</li>
+            <li>To switch it off: dial <code>##002#</code>.</li>
+          </ol>
+        ) : (
+          <p className="mt-2">No SunoSafe number has been set up yet. It needs an Indian number from a telephony provider (Vobiz), linked to SunoSafe&apos;s Agora voice agent.</p>
+        )}
+        <p className="mt-2 text-[0.9em] text-[#4b5a56]">
+          Limits: your operator may charge for forwarded calls and the codes can differ by operator. SunoSafe cannot listen to calls you
+          answer yourself; it only handles calls that are forwarded to it.
+        </p>
+      </details>
+    </Card>
+  );
+}
+
 export function SafetyScreen({ settings, onOpenIncident }: { settings: Settings; onOpenIncident: (id: number) => void }) {
   const [description, setDescription] = useState('');
   const [number, setNumber] = useState('');
@@ -458,6 +499,7 @@ export function SafetyScreen({ settings, onOpenIncident }: { settings: Settings;
     <div className="space-y-4">
       <h2 className="text-[1.6em] font-extrabold">Call and notification safety</h2>
       <InterventionDemo settings={settings} onOpenIncident={onOpenIncident} />
+      <CallShieldCard settings={settings} />
       <Card>
         <h3 className="text-[1.2em] font-extrabold">Automatic protection on Android <Tag kind="real" /></h3>
         <p className="mt-1 text-[#4b5a56]">

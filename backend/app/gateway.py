@@ -28,17 +28,22 @@ Protections on the public route:
 from __future__ import annotations
 
 import hashlib
+from datetime import UTC, datetime
+import json
 import hmac
+import logging
 import threading
+import urllib.parse
 import time
 from collections import deque
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app import main as private_app
+from app.agent.call_shield import CallShield, extract_words, shape
 from app.config import get_settings
-from app.soc import phrases
+from app.soc import phrases, speech
 from app.soc.service import SunoSafeService
 
 app = FastAPI(title="SunoSafe voice gateway", docs_url=None, redoc_url=None, openapi_url=None)
@@ -183,12 +188,15 @@ def device_notification(item: DeviceNotification,
         "level": verdict["level"],
         "label": verdict["label"],
         "say": phrases.message_alert(item.lang, verdict["level"], verdict["summary"]),
+        # English copy for phones that have no voice for the chosen language.
+        "say_en": phrases.message_alert("en", verdict["level"], verdict["summary"]),
         "incident_id": out["incident_id"],
         "duplicate": False,
         # Numbers written in a dangerous message, so the phone can warn instantly,
         # without a network round trip, if one of them calls.
         "watch_numbers": out.get("phone_numbers", [])[:5] if alert else [],
     }
+    answer["audio_id"] = speech.register(answer["say"], item.lang)
     with _recent_lock:
         _recent[key] = (now, answer)
     return answer
@@ -203,5 +211,73 @@ def device_call(item: DeviceCall, svc: SunoSafeService = Depends(private_app.get
     are looked up and forgotten.
     """
     out = svc.screen_call(item.number or None)
-    return {"alert": out["alert"], "level": out["level"], "incident_id": out["incident_id"],
-            "say": phrases.call_alert(item.lang) if out["alert"] else "", "reason": out["reason"]}
+    say = phrases.call_alert(item.lang) if out["alert"] else ""
+    return {"alert": out["alert"], "level": out["level"], "incident_id": out["incident_id"], "say": say,
+            "say_en": phrases.call_alert("en") if out["alert"] else "", "reason": out["reason"],
+            "audio_id": speech.register(say, item.lang) if say else None}
+
+
+@app.get("/device/alerts",
+         dependencies=[Depends(require_device_token), Depends(private_app.rate_limited)])
+def device_alerts(after: int = Query(default=0, ge=0), lang: str = Query(default="en", pattern=r"^(en|hi|ml|kn|ta)$"),
+                  svc: SunoSafeService = Depends(private_app.get_service)) -> dict:
+    """Warnings the phone has not fetched yet, e.g. after SunoSafe's call assistant answered a
+    scam call for the user (call forwarding -> Vobiz number -> Agora agent -> /llm in shield mode).
+    The companion asks every few seconds; only our own wording is returned, never caller text."""
+    alerts = svc.device_alerts(after, lang)
+    for a in alerts:
+        a["audio_id"] = speech.register(a["say"], lang)
+    return {"alerts": alerts}
+
+
+_SPEECH_ID = r"^[A-Za-z0-9-]{3,40}$"
+
+
+@app.get("/device/speech/{speech_id}",
+         dependencies=[Depends(require_device_token), Depends(private_app.rate_limited)])
+def device_speech(speech_id: str = Path(..., pattern=_SPEECH_ID)) -> Response:
+    """MP3 of a sentence SunoSafe produced (Murf Falcon). Only ids handed out with an alert work, so this
+    cannot be used to speak arbitrary text. 503 means: use the phone's own voice instead."""
+    found = speech.lookup(speech_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="unknown or expired")
+    s = get_settings()
+    try:
+        audio = speech.synthesize(found[0], found[1], s.murf_api_key, s.murf_voice)
+    except speech.SpeechUnavailable:
+        raise HTTPException(status_code=503, detail="voice unavailable")
+    return Response(content=audio, media_type="audio/mpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
+# ---------------------------------------------------------------------------
+# Live phone calls: the Agora phone agent asks SunoSafe what to do, every caller turn
+# ---------------------------------------------------------------------------
+CALL_SHIELD = CallShield()
+log = logging.getLogger("uvicorn.error")
+
+
+@app.post("/agora/tools/screen",
+          dependencies=[Depends(require_gateway_token), Depends(limit_body_size), Depends(private_app.rate_limited)])
+async def agora_screen_tool(request: Request,
+                            lang: str = Query(default="en", pattern=r"^(en|hi|ml|kn|ta)$"),
+                            svc: SunoSafeService = Depends(private_app.get_service)) -> dict:
+    """Function tool `screenCaller` of the Agora phone agent (see app/agent/call_shield.py).
+
+    The caller's words are untrusted input: they are only ever screened by SunoSafe's
+    rules and stored masked. The reply contains our own wording, never the caller's.
+    """
+    raw = await request.body()
+    try:
+        body: object = json.loads(raw or b"{}")
+    except ValueError:
+        body = dict(urllib.parse.parse_qsl(raw.decode("utf-8", "replace")))      # form-encoded
+    # The tool's arguments may also arrive in the address (query string).
+    words = extract_words(body) or extract_words(dict(request.query_params))
+    if "{{" in words:          # an unfilled placeholder is not something a caller said
+        words = ""
+    if not words.strip():
+        # Log the structure only (never the content), so an unexpected format can be supported.
+        log.warning("screenCaller: no callerWords found. content-type=%s query=%s body=%s",
+                    request.headers.get("content-type"), sorted(request.query_params.keys()), shape(body))
+        raise HTTPException(status_code=422, detail="callerWords is required")
+    return CALL_SHIELD.screen(svc, words, lang, datetime.now(UTC))

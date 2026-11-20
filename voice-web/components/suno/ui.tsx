@@ -4,13 +4,14 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { type AnalyzeResult, type LinkReport, type Verdict, hostOf } from './api';
 
 /** Honest label for how real a feature is. */
-export function Tag({ kind }: { kind: 'real' | 'simulated' | 'planned' }) {
+export function Tag({ kind }: { kind: 'real' | 'simulated' | 'planned' | 'setup' }) {
   const styles = {
     real: 'bg-[#dcfce7] text-[#14532d] border-[#86efac]',
     simulated: 'bg-[#fef3c7] text-[#78350f] border-[#fcd34d]',
     planned: 'bg-[#e5e7eb] text-[#374151] border-[#9ca3af]',
+    setup: 'bg-[#dbeafe] text-[#1e3a8a] border-[#93c5fd]',
   }[kind];
-  const text = { real: 'Working', simulated: 'Simulated demo', planned: 'Planned for Android app' }[kind];
+  const text = { real: 'Working', simulated: 'Simulated demo', planned: 'Planned for Android app', setup: 'Needs a phone number' }[kind];
   return (
     <span className={`inline-block rounded-full border px-3 py-0.5 text-[0.8em] font-bold ${styles}`}>{text}</span>
   );

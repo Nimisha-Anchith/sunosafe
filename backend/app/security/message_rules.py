@@ -9,7 +9,8 @@ Design choices:
     rephrase, but it cannot invent or remove signals.
   * Negation-aware for the most common false alarm: real bank SMS say
     "Do NOT share your OTP with anyone" — that must not count as a request.
-  * English plus common Hinglish / Hindi words. Other languages: planned.
+  * English and romanised Hindi directly; Hindi, Malayalam, Kannada and Tamil script through the
+    reviewed word lists in indic.py.
   * Signals are evidence, not verdicts. severity.py combines them.
 """
 from __future__ import annotations
@@ -17,6 +18,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from app.security.indic import gloss
 from app.security.rdap import registrable_domain
 from app.security.url_normalize import URLNormalizeError, extract_urls, normalize_url
 
@@ -57,11 +59,12 @@ BRANDS: dict[str, Brand] = {
 
 _NEGATION = r"(do\s*not|don'?t|dont|never|not\s+to|mat|nahi|nahin|na\s+karein|मत|ना)"
 _SHARE = r"(share|send|tell|forward|provide|give|reply|bata|batao|bhejo|बताएं|भेजें|शेयर)"
-_OTP = r"(otp|one[\s-]?time[\s-]?password|verification\s+code|ओटीपी)"
+_OTP = (r"(otp|one[\s-]?time[\s-]?password|verification\s+code|security\s+code|ओटीपी|"
+        r"code\s+(sent|received|that\s+came)|(\d|four|six)[\s-]digit\s+(code|number))")
 _PIN = r"(upi\s*pin|m-?pin|atm\s*pin|\bpin\b)"
 _CRED = (r"(password|net\s?banking|login\s+details|cvv|card\s+(number|details)|"
          r"debit\s+card|credit\s+card|aadhaa?r|pan\s+card|bank\s+details)")
-_ASK = r"(update|verify|share|enter|provide|submit|confirm|send|fill|type|link)"
+_ASK = r"(update|verify|share|enter|provide|submit|confirm|send|fill|type|link|tell|give|read\s+out)"
 
 PHONE_RE = re.compile(r"(?<!\d)(?:\+?91[\s-]?)?([6-9]\d{4}[\s-]?\d{5})(?!\d)")
 
@@ -128,6 +131,10 @@ def analyze_message(text: str) -> MessageAnalysis:
             add(Signal("contains_upi_payment_link", "payment_trick",
                        "The message contains a UPI payment link; opening it can start a payment request.", raw))
 
+    # Hindi, Malayalam, Kannada and Tamil script: swap the scam vocabulary for the English words the
+    # rules below understand (see indic.py). Links were taken from the original text above.
+    t = gloss(t)
+
     # --- secrets the sender wants -------------------------------------------
     if m := _non_negated_request(t, _OTP):
         add(Signal("requests_otp", "credential_request",
@@ -186,6 +193,13 @@ def analyze_message(text: str) -> MessageAnalysis:
         add(Signal("electricity_disconnection", "pressure",
                    "It threatens to cut your electricity. Electricity boards send official notices, not urgent SMS with numbers.",
                    m.group(0)))
+
+    # A demand to move money. On its own this is weak (bills are normal); with police or court
+    # threats it is the "digital arrest" scam (see severity R13).
+    money = r"(money|rupees|\brs\.?|₹|amount|\bfine\b|penalty|\bfee\b|charges)"
+    if m := _non_negated_request(t, money, r"(transfer|deposit|\bpay\b|send)", window=30):
+        add(Signal("asks_for_payment", "payment_trick",
+                   "It asks you to send or transfer money.", m.group(0)))
 
     # --- contact numbers -------------------------------------------------------
     a.phone_numbers = list(dict.fromkeys(re.sub(r"[\s-]", "", m.group(1)) for m in PHONE_RE.finditer(t)))

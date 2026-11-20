@@ -68,6 +68,14 @@ CREATE TABLE IF NOT EXISTS blocklist (
     created_at TEXT NOT NULL,
     UNIQUE(kind, value)
 );
+CREATE TABLE IF NOT EXISTS device_alerts (   -- warnings waiting for the Android companion to fetch
+    id          INTEGER PRIMARY KEY,
+    ts          TEXT NOT NULL,
+    kind        TEXT NOT NULL,            -- call_shielded
+    incident_id INTEGER,
+    level       TEXT NOT NULL,
+    data        TEXT NOT NULL             -- JSON, our own wording only (never caller text)
+);
 CREATE TABLE IF NOT EXISTS inbox (       -- the one message most recently shared from the app
     id   INTEGER PRIMARY KEY CHECK (id = 1),
     text TEXT NOT NULL,
@@ -224,6 +232,17 @@ class Store:
     # Kept in the database (not in memory) so the private API process and the
     # public voice gateway process both see it. Holds the raw message only until
     # it is analysed or replaced; analysis results are stored redacted elsewhere.
+    # ---- device alerts -----------------------------------------------------
+    def add_device_alert(self, ts: str, kind: str, incident_id: int | None, level: str, data: dict) -> int:
+        cur = self._exec("INSERT INTO device_alerts(ts, kind, incident_id, level, data) VALUES (?,?,?,?,?)",
+                         (ts, kind, incident_id, level, json.dumps(data, ensure_ascii=False)))
+        return cur.lastrowid
+
+    def device_alerts_after(self, after_id: int, since: str, limit: int = 10) -> list[dict]:
+        rows = self._all("SELECT id, ts, kind, incident_id, level, data FROM device_alerts "
+                         "WHERE id > ? AND ts >= ? ORDER BY id LIMIT ?", (after_id, since, limit))
+        return [{**r, "data": json.loads(r["data"]) if isinstance(r["data"], str) else r["data"]} for r in rows]
+
     def set_inbox(self, text: str, at: str) -> None:
         self._exec("INSERT INTO inbox(id, text, at) VALUES (1, ?, ?) "
                    "ON CONFLICT(id) DO UPDATE SET text=excluded.text, at=excluded.at", (text, at))

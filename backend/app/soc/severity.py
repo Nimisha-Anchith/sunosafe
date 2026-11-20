@@ -109,6 +109,23 @@ def assess(codes: set[str], disclosures: set[str] | None = None,
         fire("R11_same_scam_by_message_and_call", "high",
              "The same scam reached you by message and by a phone call, a common two-step trick.",
              ["same_scam_story_by_call"])
+    if "authority_threat" in codes and "asks_for_payment" in codes:
+        fire("R13_authority_demands_payment", "high",
+             "It uses police, court or government threats and demands money, the 'digital arrest' scam. "
+             "No official collects money over a phone call or chat.", ["authority_threat", "asks_for_payment"])
+    if "too_good_to_be_true" in codes and "asks_for_payment" in codes:
+        live = "live_caller" in codes
+        fire("R14_pay_to_receive_a_prize", "high" if live else "medium",
+             "It promises a prize, refund or job and asks you to pay first. Genuine prizes never need a fee.",
+             ["too_good_to_be_true", "asks_for_payment"] + (["live_caller"] if live else []))
+    elif "live_caller" in codes and "asks_for_payment" in codes:
+        fire("R15_caller_asked_for_money", "medium",
+             "A caller asked you to send money. Check first by calling the person or office on a number you already know.",
+             ["live_caller", "asks_for_payment"])
+    if "live_caller" in codes and secrets:
+        fire("R12_caller_asked_for_secret", "high",
+             "A caller asked for an OTP, PIN, password or remote access on a live call, the most common phone scam.",
+             ["live_caller"] + secrets)
     if len(pressure) >= 2:
         fire("R8_multiple_pressure_tactics", "low", "It uses several pressure tactics.", pressure)
     elif pressure or weak:

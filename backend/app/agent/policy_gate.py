@@ -63,7 +63,8 @@ class Session:
     investigated: set[str] = field(default_factory=set)   # URLs our tools really checked
     links: dict[str, str] = field(default_factory=dict)   # "link 1" -> URL; the LLM only sees the label
     lang: str = "en"                                       # preferred reply language
-    mode: str = "guard"                                    # "guard" (normal) or "drill" (scam practice)
+    mode: str = "guard"                                    # "guard" (normal), "drill" (practice), "shield" (answers calls)
+    shield: dict | None = None                             # call-shield state for the current call
     seeded: bool = False                                   # incident context already loaded
     pending: Pending | None = None
     incident_id: int | None = None

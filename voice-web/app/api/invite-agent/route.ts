@@ -3,11 +3,13 @@ import {
   AgoraClient,
   Agent,
   Area,
+  AresSTT,
   DeepgramSTT,
   ExpiresIn,
   MiniMaxTTS,
   MurfTTS,
   OpenAI,
+  SarvamSTT,
 } from 'agora-agents';
 import { ClientStartRequest, AgentResponse } from '@/types/conversation';
 import { DEFAULT_AGENT_UID } from '@/lib/agora';
@@ -56,6 +58,21 @@ function requireEnv(name: string): string {
 // Murf params per https://docs.agora.io/en/ai/models/tts/murf
 const MURF_LOCALE: Record<string, string> = { en: 'en-IN', hi: 'hi-IN', ml: 'ml-IN', kn: 'kn-IN', ta: 'ta-IN' };
 
+// Listening (speech recognition) per language.
+//   en, hi : Deepgram nova-3 (Agora-managed, tested)
+//   kn, ta : Agora ARES (managed, no extra key; its language list includes kn-IN and ta-IN)
+//   ml     : Agora's own recognizers have no Malayalam, so Sarvam is used when NEXT_SARVAM_API_KEY is set;
+//            otherwise the agent still SPEAKS Malayalam but listens with the English recognizer (poor).
+const ARES_LANGUAGE: Record<string, 'kn-IN' | 'ta-IN'> = { kn: 'kn-IN', ta: 'ta-IN' };
+
+function buildStt(lang: string) {
+  if (lang === 'kn' || lang === 'ta') return new AresSTT();
+  if (lang === 'ml' && process.env.NEXT_SARVAM_API_KEY) {
+    return new SarvamSTT({ apiKey: process.env.NEXT_SARVAM_API_KEY, language: 'ml-IN' });
+  }
+  return new DeepgramSTT({ model: 'nova-3', language: lang === 'hi' ? 'hi' : 'en' });
+}
+
 function buildTts(lang: string = 'en') {
   const murfKey = process.env.NEXT_MURF_API_KEY;
   if (murfKey) {
@@ -89,16 +106,18 @@ type Lang = 'en' | 'hi' | 'ml' | 'kn' | 'ta';
 const LANGS: Lang[] = ['en', 'hi', 'ml', 'kn', 'ta'];
 const BACKEND = (process.env.SUNOSAFE_BACKEND_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
 
-type VoicePlan = { incident?: number; mode: 'guard' | 'drill'; lang: Lang; greeting: string };
+type VoicePlan = { incident?: number; mode: 'guard' | 'drill' | 'shield'; lang: Lang; greeting: string };
 
 /** Validate the optional context and fetch the opening sentence from the private backend. */
 async function planVoice(body: ClientStartRequest): Promise<VoicePlan> {
   const lang: Lang = LANGS.includes(body.lang as Lang) ? (body.lang as Lang) : 'en';
-  const mode = body.mode === 'drill' ? 'drill' : 'guard';
+  const mode = body.mode === 'drill' || body.mode === 'shield' ? body.mode : 'guard';
   const incident = Number.isInteger(body.incident_id) && (body.incident_id ?? 0) > 0 ? body.incident_id : undefined;
   let greeting = lang === 'hi' ? 'नमस्ते, मैं सुनोसेफ़ हूँ। आप मुझसे किसी संदेश, लिंक या कॉल के बारे में पूछ सकते हैं।' : SUNOSAFE_GREETING;
   try {
     const path = mode === 'drill' ? `/api/voice/drill-greeting?lang=${lang}`
+      : mode === 'shield' ? `/api/voice/shield-greeting?lang=${lang}`
+      : !incident ? `/api/voice/greeting?lang=${lang}`
       : incident ? `/api/incidents/${incident}/voice-brief?lang=${lang}` : null;
     if (path) {
       const r = await fetch(BACKEND + path, { cache: 'no-store', signal: AbortSignal.timeout(5000) });
@@ -180,6 +199,7 @@ export async function POST(request: NextRequest) {
       maxHistory: 50,
       // VAD controls how the agent detects the start and end of a user's turn.
       turnDetection: {
+        ...(ARES_LANGUAGE[plan.lang] ? { language: ARES_LANGUAGE[plan.lang] } : {}),
         config: {
           speech_threshold: 0.5,
           start_of_speech: {
@@ -213,11 +233,7 @@ export async function POST(request: NextRequest) {
       },
     })
       .withStt(
-        new DeepgramSTT({
-          model: 'nova-3',
-          // Listening: Hindi or English. Malayalam, Kannada and Tamil listening is not enabled yet.
-          language: plan.lang === 'hi' ? 'hi' : 'en',
-        }),
+        buildStt(plan.lang),
         // BYOK: uncomment the following block and set NEXT_DEEPGRAM_API_KEY
         // new DeepgramSTT({
         //   apiKey: requireEnv('NEXT_DEEPGRAM_API_KEY'),

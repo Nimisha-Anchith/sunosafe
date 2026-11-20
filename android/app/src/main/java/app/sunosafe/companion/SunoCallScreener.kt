@@ -38,7 +38,8 @@ class SunoCallScreener : CallScreeningService() {
             Prefs.bump(context, "call_alerts")
             Prefs.setLastResult(context, "Warned you about a call from a number seen in a scam message.")
             Alerts.warn(context, "Careful: this caller is linked to a scam",
-                Verdict(true, "high", "danger", callWarning(context), localIncident.takeIf { it > 0 }))
+                Verdict(true, "high", "danger", callWarning(context), localIncident.takeIf { it > 0 },
+                    sayEn = EN_CALL_WARNING, audioId = "call-watch-" + Prefs.lang(context)))
         }
 
         // 3. Backend correlation (records the call only if it is linked to scam evidence).
@@ -49,12 +50,18 @@ class SunoCallScreener : CallScreeningService() {
                 Prefs.bump(context, "call_alerts")
                 Prefs.setLastResult(context, "Warned you about a call linked to an earlier scam.")
                 Alerts.warn(context, "Careful: this caller is linked to a scam",
-                    verdict.copy(say = verdict.say.ifBlank { callWarning(context) }))
+                    verdict.copy(say = verdict.say.ifBlank { callWarning(context) },
+                        sayEn = verdict.sayEn.ifBlank { EN_CALL_WARNING }))
             }
         }.start()
     }
 
     private fun callWarning(c: android.content.Context): String =
         if (Prefs.lang(c) == "hi") "सावधान। यह नंबर पहले आए एक धोखाधड़ी संदेश में था। कोई OTP, PIN या बैंक जानकारी न बताएं।"
-        else "Careful. This caller's number appeared in a scam message you received. Do not share any OTP, PIN or bank details."
+        else EN_CALL_WARNING
+
+    private companion object {
+        const val EN_CALL_WARNING = "Careful. This caller's number appeared in a scam message you received. " +
+            "Do not share any OTP, PIN or bank details."
+    }
 }

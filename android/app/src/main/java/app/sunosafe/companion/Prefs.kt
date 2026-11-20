@@ -20,7 +20,7 @@ object Prefs {
         "org.telegram.messenger" to "Telegram",
     )
 
-    val LANGUAGES: Map<String, String> = linkedMapOf("en" to "English", "hi" to "हिंदी")
+    val LANGUAGES: Map<String, String> = linkedMapOf("en" to "English", "hi" to "हिंदी", "ml" to "മലയാളം", "kn" to "ಕನ್ನಡ", "ta" to "தமிழ்")
 
     private const val WATCH_DAYS = 7L
 
@@ -66,6 +66,10 @@ object Prefs {
 
     fun lastResult(c: Context): String = sp(c).getString("last", "Nothing checked yet.") ?: ""
     fun setLastResult(c: Context, text: String) = sp(c).edit().putString("last", text).apply()
+
+    /** Highest call-shield alert id already shown, so each alert is spoken once. */
+    fun lastAlertId(c: Context): Int = sp(c).getInt("alert_id", 0)
+    fun setLastAlertId(c: Context, id: Int) = sp(c).edit().putInt("alert_id", id).apply()
 
     fun lastIncident(c: Context): Int = sp(c).getInt("incident", 0)
     fun setLastIncident(c: Context, id: Int?) { if (id != null && id > 0) sp(c).edit().putInt("incident", id).apply() }

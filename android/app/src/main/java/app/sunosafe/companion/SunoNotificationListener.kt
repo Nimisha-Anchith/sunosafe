@@ -5,6 +5,8 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 
 /**
  * Watches new notifications from the messaging apps the user has left switched on,
@@ -20,6 +22,10 @@ import java.util.concurrent.Executors
  */
 class SunoNotificationListener : NotificationListenerService() {
 
+    private companion object {
+        const val POLL_SECONDS = 10L
+    }
+
     private val worker: ExecutorService = Executors.newSingleThreadExecutor()
 
     // Recently handled texts, so edits/updates of the same message are not re-sent.
@@ -27,8 +33,39 @@ class SunoNotificationListener : NotificationListenerService() {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, Long>?) = size > 200
     }
 
+    // Call shield: when a forwarded call is answered by SunoSafe's call assistant (Vobiz number ->
+    // Agora agent), the backend queues a warning. This service is kept alive by Android while
+    // notification access is on, so it asks for new warnings every few seconds.
+    private var poller: ScheduledExecutorService? = null
+
     override fun onListenerConnected() {
         Prefs.setLastResult(this, "Notification access is on. SunoSafe is ready.")
+        if (poller == null) {
+            poller = Executors.newSingleThreadScheduledExecutor().also {
+                it.scheduleWithFixedDelay({ pollShieldAlerts() }, 5, POLL_SECONDS, TimeUnit.SECONDS)
+            }
+        }
+    }
+
+    override fun onListenerDisconnected() {
+        poller?.shutdownNow()
+        poller = null
+    }
+
+    private fun pollShieldAlerts() {
+        try {
+            val c = applicationContext
+            if (!Prefs.monitoringOn(c) || !Prefs.isPaired(c)) return
+            val alerts = Backend.fetchAlerts(c, Prefs.lastAlertId(c)) ?: return
+            for (a in alerts) {
+                Prefs.setLastAlertId(c, a.id)
+                Prefs.bump(c, "call_alerts")
+                Prefs.setLastResult(c, "SunoSafe answered a scam call for you and warned you.")
+                Alerts.warn(c, "SunoSafe answered a scam call for you", a.verdict)
+            }
+        } catch (e: Exception) {
+            // keep polling
+        }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -96,6 +133,7 @@ class SunoNotificationListener : NotificationListenerService() {
     }
 
     override fun onDestroy() {
+        poller?.shutdownNow()
         worker.shutdown()
         super.onDestroy()
     }

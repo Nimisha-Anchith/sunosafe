@@ -9,6 +9,7 @@ import type { VoiceContext } from '@/types/conversation';
  * Optional address parameters (validated here and again on the server):
  *   ?incident=12  the agent starts already briefed on that incident
  *   ?mode=drill   scam-call practice
+ *   ?mode=shield  test the call assistant: you play the caller
  *   ?lang=hi      preferred language (en, hi, ml, kn, ta)
  */
 const LANGS = ['en', 'hi', 'ml', 'kn', 'ta'] as const;
@@ -24,7 +25,7 @@ export default async function TalkPage({
   const lang = one(params.lang);
   const context: VoiceContext = {
     ...(Number.isInteger(incident) && incident > 0 && incident < 1e9 ? { incident_id: incident } : {}),
-    mode: one(params.mode) === 'drill' ? 'drill' : 'guard',
+    mode: one(params.mode) === 'drill' ? 'drill' : one(params.mode) === 'shield' ? 'shield' : 'guard',
     lang: (LANGS as readonly string[]).includes(lang) ? (lang as VoiceContext['lang']) : 'en',
   };
   return (

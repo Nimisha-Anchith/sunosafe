@@ -63,5 +63,27 @@ Legend: ✅ Implemented & tested · 🟡 Implemented, untested · 📋 Planned �
 | Voice | Scam-call practice drill (no tools, never collects data) | ✅ (text) / 🟡 (spoken) | Tests; Agora agent RUNNING in drill mode |
 | Voice | Preferred language: replies + Murf locale in en/hi/ml/kn/ta; listening en + hi (Deepgram) | 🟡 | Agent accepted Hindi config; spoken Hindi not yet tested by a person |
 | Web app | Evidence timeline on the phone, "Hear SunoSafe explain this", deep links from the companion, Intervention demo (simulated inputs, real engine) | ✅ | Checked at phone size in the browser |
-| Known issue | Phone Chrome voice error (InvalidModificationError); fix applied (Agora SDK 4.24.10 + ENABLE_PREALLOC_PC off) | 🟡 | Not yet confirmed on the phone |
+| Known issue | Phone Chrome voice error (InvalidModificationError); fixes applied: Agora SDK 4.24.10, ENABLE_PREALLOC_PC off, and a guard that retries `setConfiguration` keeping fixed settings | 🟡 | Still failed on the S24 before the guard; guard not yet tested on the phone |
 | Not possible | Listening to or transcribing ordinary cellular calls; reversing payments | 🔒 | Android/bank limits; SunoSafe warns while ringing and guides recovery instead |
+
+## Update 20 Nov 2026 (evening) — Hindi voice fix and Call shield
+
+| Area | Feature | Status | Evidence |
+|---|---|---|---|
+| Android | Spoken warning when Hindi is chosen: prefers Google's speech engine, checks that a Hindi voice is really installed, otherwise speaks the English copy (`say_en`) and tells the user how to add Hindi; speaks a sample when the language is changed | 🟡 Built (0.3.0), compiles | Cause found on the S24: Hindi was chosen and the phone stayed silent; English worked. Fix not yet run on the phone |
+| Mini-SIEM | Call shield screening: caller's words checked by SunoSafe's rules, `call_shielded` event only when scam signs appear, R12 (caller asks for OTP/PIN/remote access) high, correlation with earlier messages, one phone alert per call | ✅ | `tests/test_call_shield.py` (7 tests); live through the tunnel with Groq: 0.8 s per turn, joined the SBI SMS incident, injection attempt refused, 401 without tokens |
+| Voice | Shield mode for the Agora agent (`mode=shield`): no tools, knows nothing about the user, calm scripted goals | ✅ (text) / 🟡 (spoken) | Live text run; browser test page `/talk?mode=shield` renders; spoken test not yet done |
+| Android | Companion fetches call-shield warnings (`/device/alerts`, every 10 s) and speaks them | 🟡 Built, compiles | Not yet run on the phone |
+| Calls | Real forwarded calls via Vobiz number → Agora inbound agent | 📋 Needs setup | Needs the Vobiz number, SIP trunk and Agora inbound agent (see demo-and-setup.md); cost to be confirmed by the account owner |
+
+## Update 20 Nov 2026 (night) — live call screening through Agora's phone agent
+
+| Area | Feature | Status | Evidence |
+|---|---|---|---|
+| Finding | A saved Agora phone agent refuses non-approved LLM addresses ("Provider endpoint is not approved"); SunoSafe therefore screens through a function tool | ✅ Verified | Agora's own validator: our gateway, example.com and Groq refused, api.openai.com accepted |
+| Calls | Agora phone agent "SunoSafe Call Shield" (Deepgram, gpt-4.1-mini, Murf) created and updated through the platform REST API; number imported and routed to it | ✅ Configured | `scripts/agora_shield.py status`: 1 agent, 1 number with inbound agent |
+| Calls | Live screening tool `/agora/tools/screen`: every caller sentence checked by SunoSafe's rules, fixed refusal text returned, Mini-SIEM event, correlation, one phone alert | ✅ | `tests/test_agora_tool.py`; voice test of the real agent in an RTC session with recorded Hindi caller audio: 2 tool calls answered 200, `call_shielded` (high) joined the SBI SMS incident, alert queued |
+| Calls | The same over a real phone line (Vobiz → Agora SBC → agent) | 🟡 Not yet tested | Needs the Vobiz inbound trunk pointed at Agora and a test call |
+| Messages / calls | Scam rules on Hindi, Malayalam, Kannada and Tamil script (word lists in `app/security/indic.py`), incl. "do not share" forms; card-number, "code sent to your phone", lottery-fee and digital-arrest payment rules (R13–R15) | ✅ | `tests/test_indic.py`. Malayalam, Kannada, Tamil lists not reviewed by a native speaker |
+| Voice | Spoken phone warnings with Murf Falcon in 5 languages (`/device/speech/<id>`), phone voice only as fallback | ✅ backend / 🟡 phone | Audio fetched through the tunnel in all 5 languages; playback on the S24 not yet tested |
+| Android | Companion 0.3.0: Murf audio playback, 5-language picker, call-shield alert poller | 🟡 Built, compiles | Not yet installed on the S24 |

@@ -12,8 +12,8 @@ export interface ClientStartRequest {
   channel_name: string;
   /** SunoSafe: incident the user opened the voice agent from (gives it context). */
   incident_id?: number;
-  /** SunoSafe: 'guard' (normal) or 'drill' (scam practice). */
-  mode?: 'guard' | 'drill';
+  /** SunoSafe: 'guard' (normal), 'drill' (scam practice) or 'shield' (call assistant test: you play the caller). */
+  mode?: 'guard' | 'drill' | 'shield';
   /** SunoSafe: preferred language for replies and voice. */
   lang?: 'en' | 'hi' | 'ml' | 'kn' | 'ta';
 }

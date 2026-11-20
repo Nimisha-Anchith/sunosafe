@@ -39,9 +39,10 @@ def client(svc, monkeypatch):
     gateway.app.dependency_overrides.clear()
 
 
-def test_only_four_routes_exist():
+def test_only_the_public_routes_exist():
     paths = sorted(r.path for r in gateway.app.routes)
-    assert paths == ["/device/calls", "/device/notifications", "/health", "/llm/chat/completions"]
+    assert paths == ["/agora/tools/screen", "/device/alerts", "/device/calls", "/device/notifications", "/device/speech/{speech_id}", "/health",
+                     "/llm/chat/completions"]
 
 
 # ---------------------------------------------------------------- Android companion
@@ -55,7 +56,7 @@ def test_scam_notification_is_investigated_and_raises_an_alert(client, svc):
     event = [e for e in svc.store.recent_events() if e["type"] == "message_analysed"][0]
     assert event["source"] == "message_rules/notification"
     assert "9876543210" not in event["data"]["text"]            # stored masked
-    assert set(body) == {"alert", "level", "label", "say", "incident_id", "duplicate", "watch_numbers"}
+    assert set(body) == {"alert", "level", "label", "say", "say_en", "incident_id", "duplicate", "watch_numbers", "audio_id"}
     assert body["watch_numbers"] == ["9876543210"]               # for instant on-phone caller warnings
 
 

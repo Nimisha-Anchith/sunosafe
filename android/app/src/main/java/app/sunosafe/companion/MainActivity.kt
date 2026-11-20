@@ -57,6 +57,13 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         refresh()
+        // Keep the "this caller is linked to a scam" warning on the phone, in the chosen language,
+        // so it can be spoken at once while a call is ringing, even with a poor connection.
+        if (Prefs.isPaired(this)) {
+            val app = applicationContext
+            val lang = Prefs.lang(app)
+            Thread { Backend.fetchSpeech(app, "call-watch-$lang") }.start()
+        }
     }
 
     // ------------------------------------------------------------------ pairing
@@ -128,7 +135,8 @@ class MainActivity : Activity() {
             "Unknown callers checked: ${Prefs.count(this, "calls")}\n" +
             "Caller warnings: ${Prefs.count(this, "call_alerts")}\n" +
             "Scam numbers remembered (7 days): ${Prefs.watchCount(this)}\n\n" +
-            "Latest: ${Prefs.lastResult(this)}"
+            "Latest: ${Prefs.lastResult(this)}" +
+            (if (Speaker.lastNote.isNotBlank()) "\nVoice: ${Speaker.lastNote}" else "")
     }
 
     // ------------------------------------------------------------------ actions
@@ -292,12 +300,17 @@ class MainActivity : Activity() {
             },
         ))
 
-        val languageRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+        // Five languages: two rows so every button stays big enough to read and tap.
+        val languageRow = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val rows = listOf(LinearLayout(this), LinearLayout(this)).onEach {
+            it.orientation = LinearLayout.HORIZONTAL
+            it.gravity = Gravity.CENTER_VERTICAL
+            it.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
+            languageRow.addView(it)
         }
-        Prefs.LANGUAGES.forEach { (code, name) ->
-            languageRow.addView(Button(this).apply {
+        Prefs.LANGUAGES.entries.forEachIndexed { index, (code, name) ->
+            rows[if (index < 3) 0 else 1].addView(Button(this).apply {
                 text = name
                 textSize = 17f
                 isAllCaps = false
@@ -307,6 +320,9 @@ class MainActivity : Activity() {
                 layoutParams = LinearLayout.LayoutParams(0, dp(56), 1f).apply { marginEnd = dp(8) }
                 setOnClickListener {
                     Prefs.setLang(this@MainActivity, code)
+                    // Speak a sample at once, so the user knows this phone can say warnings in this language.
+                    Speaker.say(applicationContext, "SunoSafe", code, "SunoSafe will now warn you in English.",
+                        "voice-sample-$code")
                     recreate()
                 }
             })

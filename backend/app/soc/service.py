@@ -40,6 +40,10 @@ CALL_ASKS = {
     "card_details": "requests_credentials", "bank_details": "requests_credentials",
     "remote_app": "asks_remote_access", "money": "asks_for_payment",
 }
+# What a screened caller asked for (signal code -> short key used in spoken alerts).
+SHIELD_ASKS = {"requests_otp": "otp", "requests_upi_pin": "pin", "pin_to_receive_money": "pin",
+               "requests_credentials": "password", "asks_remote_access": "remote_app",
+               "asks_for_payment": "money", "kyc_update_request": "kyc"}
 DOMAIN_BLOCK_EVIDENCE = {"known_dangerous_site", "domain_recently_registered", "link_not_official_for_brand"}
 
 STEP_LIBRARY: dict[str, tuple[str, str, bool]] = {
@@ -175,7 +179,8 @@ class SunoSafeService:
 
     def _incident_channels(self, incident_id: int) -> set[str]:
         """Which channels contributed suspicious (medium+) evidence to this incident."""
-        kinds = {"message_analysed": "message", "call_reported": "call", "call_screened": "call"}
+        kinds = {"message_analysed": "message", "call_reported": "call", "call_screened": "call",
+                 "call_shielded": "call"}
         out = set()
         for ev in self.store.events_for_incident(incident_id):
             if ev["type"] in kinds and ev["level"] and LEVELS.index(ev["level"]) >= LEVELS.index("medium"):
@@ -341,7 +346,8 @@ class SunoSafeService:
         if hits:
             first = hits[-1]
             where = {"message_analysed": "a suspicious message", "call_reported": "a call you reported",
-                     "call_screened": "an earlier suspicious call"}.get(first["type"], "a suspicious event")
+                     "call_screened": "an earlier suspicious call",
+                     "call_shielded": "a scam call SunoSafe answered"}.get(first["type"], "a suspicious event")
             return {"number_known": True, "risk": "high", "incident_id": first["incident_id"],
                     "reason": f"This number appeared in {where} on {first['ts'][:16].replace('T', ' ')}."}
         intl = raw_number.strip().startswith("+") and not raw_number.strip().startswith("+91")
@@ -370,6 +376,58 @@ class SunoSafeService:
                                       "suspicious_call", ["hang_up_call_back", "report_chakshu"])
         return {"alert": True, "level": "high", "incident_id": incident_id, "reason": risk["reason"]}
 
+    # ------------------------------------------------------------------ call shield
+    def shield_screen(self, caller_text: str, already: dict | None = None) -> dict:
+        """Screen everything a caller has said so far to SunoSafe's call assistant.
+
+        The call reached SunoSafe through call forwarding (Vobiz number -> Agora agent).
+        Nothing is stored unless the caller shows scam signs. Then one `call_shielded`
+        event is recorded (again only if the evidence gets stronger), correlated with
+        earlier messages and calls, and one alert is queued for the user's phone.
+        `already` is the per-call state: {"level", "incident_id", "alerted"}.
+        """
+        already = dict(already or {"level": None, "incident_id": None, "alerted": False})
+        analysis = analyze_message(caller_text)
+        codes = analysis.codes() | {"live_caller"}       # these words were spoken by a caller, live
+        verdict = assess(codes)
+        out = {"level": verdict.level, "label": verdict.label,
+               "why": [r.text for r in verdict.reasons][:4], "state": already, "recorded": False}
+        suspicious = LEVELS.index(verdict.level) >= LEVELS.index("medium")
+        stronger = already["level"] is None or LEVELS.index(verdict.level) > LEVELS.index(already["level"])
+        if not (suspicious and stronger):
+            return out
+        indicators = ([("phone", p) for p in analysis.phone_numbers] + [("brand", b) for b in analysis.brands]
+                      + _link_indicators(analysis.web_urls))
+        brand = BRANDS[analysis.brands[0]].name if analysis.brands else None
+        asked = sorted({SHIELD_ASKS[c] for c in codes if c in SHIELD_ASKS})
+        ev = self.store.add_event(self._ts(), "call_shielded", "call_shield",
+                                  f"SunoSafe's call assistant answered a call: {verdict.label} ({verdict.level})",
+                                  {"text": redact(caller_text)[:2000], "codes": sorted(codes), "asked": asked,
+                                   "verdict_reasons": [asdict(r) for r in verdict.reasons]},
+                                  verdict.level, indicators=indicators)
+        title = f"Scam call claiming to be {brand}" if brand else "Scam call answered by SunoSafe"
+        incident_id = self._correlate([ev], indicators, verdict, title, "suspicious_call",
+                                      ["hang_up_call_back", "report_chakshu"], force_incident=True,
+                                      incident_id=already["incident_id"])
+        # The spoken "this looks like a scam" warning is for strong evidence only; a caution is recorded quietly.
+        if not already["alerted"] and LEVELS.index(verdict.level) >= LEVELS.index("high"):
+            self.store.add_device_alert(self._ts(), "call_shielded", incident_id, verdict.level,
+                                        {"brand": brand, "asked": asked})
+            already["alerted"] = True
+        already.update(level=verdict.level, incident_id=incident_id)
+        return {**out, "state": already, "recorded": True, "incident_id": incident_id}
+
+    def device_alerts(self, after_id: int, lang: str = "en") -> list[dict]:
+        """Warnings for the phone that it has not fetched yet (last 30 minutes only)."""
+        since = (self.clock() - timedelta(minutes=30)).isoformat(timespec="seconds")
+        out = []
+        for a in self.store.device_alerts_after(after_id, since):
+            brand, asked = a["data"].get("brand"), a["data"].get("asked", [])
+            out.append({"id": a["id"], "kind": a["kind"], "incident_id": a["incident_id"], "level": a["level"],
+                        "say": phrases.shield_alert(lang, brand, asked),
+                        "say_en": phrases.shield_alert("en", brand, asked)})
+        return out
+
     # ------------------------------------------------------------------ voice context
     @staticmethod
     def safe_event_label(ev: dict) -> str:
@@ -385,6 +443,7 @@ class SunoSafeService:
             "url_investigated": lambda: f"Its link to {host(data.get('url'))} was investigated.",
             "call_reported": lambda: "You reported a suspicious phone call.",
             "call_screened": lambda: "A call came from a number that appeared in the scam message.",
+            "call_shielded": lambda: "SunoSafe's call assistant answered a scam call for you.",
             "correlation_cross_channel": lambda: "The same scam reached you by message and by phone call.",
             "remediation_completed": lambda: f"You approved blocking it ({data.get('approved_via', 'app')}).",
             "protected_browser_block": lambda: "SunoSafe stopped an attempt to open the blocked website.",
