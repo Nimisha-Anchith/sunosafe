@@ -24,6 +24,7 @@ const ALLOWED: Rule[] = [
   { method: 'GET', pattern: /^blocklist$/ },
   { method: 'POST', pattern: /^inbox$/ },
   { method: 'GET', pattern: /^incidents$/ },
+  { method: 'GET', pattern: /^dashboard$/ },
   { method: 'GET', pattern: /^incidents\/\d{1,9}$/ },
   { method: 'GET', pattern: /^incidents\/\d{1,9}\/summary$/ },
   { method: 'PATCH', pattern: /^incidents\/\d{1,9}\/steps\/[a-z_]{1,40}$/ },
@@ -57,7 +58,10 @@ async function forward(request: NextRequest, segments: string[]) {
 
   try {
     // Only our own headers are sent: no cookies, no forwarding headers.
-    const upstream = await fetch(`${BACKEND}/api/${path}`, {
+    // Only one query parameter is ever forwarded: the dashboard's day range, as a validated number.
+    const days = Number(request.nextUrl.searchParams.get('days'));
+    const query = path === 'dashboard' && Number.isInteger(days) && days >= 1 && days <= 30 ? `?days=${days}` : '';
+    const upstream = await fetch(`${BACKEND}/api/${path}${query}`, {
       method: request.method,
       headers: body ? { 'Content-Type': 'application/json' } : undefined,
       body,

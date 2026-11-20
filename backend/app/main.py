@@ -280,6 +280,13 @@ def add_note(incident_id: int, req: NoteIn, svc: SunoSafeService = Depends(get_s
     return _errors(svc.add_note, incident_id, req.author, req.text)
 
 
+@app.get("/api/dashboard", dependencies=Guarded)
+def dashboard_view(days: int = 7, svc: SunoSafeService = Depends(get_service)) -> dict:
+    """Mini-SIEM overview: real counts, timeline, threat types, incidents, calls, latest shielded call."""
+    from app.soc import dashboard
+    return dashboard.build(svc.store, svc.clock(), days)
+
+
 @app.get("/api/events", dependencies=Guarded)
 def events(svc: SunoSafeService = Depends(get_service)) -> list[dict]:
     return svc.store.recent_events(100)

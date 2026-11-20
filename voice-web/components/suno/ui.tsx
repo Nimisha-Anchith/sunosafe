@@ -6,20 +6,35 @@ import { type AnalyzeResult, type LinkReport, type Verdict, hostOf } from './api
 /** Honest label for how real a feature is. */
 export function Tag({ kind }: { kind: 'real' | 'simulated' | 'planned' | 'setup' }) {
   const styles = {
-    real: 'bg-[#dcfce7] text-[#14532d] border-[#86efac]',
-    simulated: 'bg-[#fef3c7] text-[#78350f] border-[#fcd34d]',
-    planned: 'bg-[#e5e7eb] text-[#374151] border-[#9ca3af]',
-    setup: 'bg-[#dbeafe] text-[#1e3a8a] border-[#93c5fd]',
+    real: 'tag-real',
+    simulated: 'tag-sim',
+    planned: 'tag-plan',
+    setup: 'tag-setup',
   }[kind];
   const text = { real: 'Working', simulated: 'Simulated demo', planned: 'Planned for Android app', setup: 'Needs a phone number' }[kind];
   return (
-    <span className={`inline-block rounded-full border px-3 py-0.5 text-[0.8em] font-bold ${styles}`}>{text}</span>
+    <span className={`inline-block rounded-full border px-3 py-0.5 align-middle text-[0.75em] font-bold ${styles}`}>{text}</span>
   );
 }
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-3xl border border-[#d9d5c7] bg-white p-5 shadow-sm ${className}`}>{children}</section>
+    <section className={`s-card rounded-3xl p-5 ${className}`}>{children}</section>
+  );
+}
+
+/** Level → colour, shared by badges, charts and tables. */
+export const LEVEL_COLOR: Record<string, string> = {
+  critical: '#ff4d4f', high: '#f04438', medium: '#f59e0b', low: '#eab308', info: '#5fd3a5',
+};
+
+export function LevelBadge({ level }: { level: string | null | undefined }) {
+  const l = level ?? 'info';
+  const label = l === 'info' ? 'None' : l[0].toUpperCase() + l.slice(1);
+  const color = LEVEL_COLOR[l] ?? LEVEL_COLOR.info;
+  return (
+    <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[0.78em] font-bold"
+      style={{ color, background: `${color}22`, border: `1px solid ${color}55` }}>{label}</span>
   );
 }
 
@@ -39,10 +54,10 @@ export function BigButton({
   ariaLabel?: string;
 }) {
   const tones = {
-    primary: 'bg-[#134e4a] text-white',
-    danger: 'bg-[#b42318] text-white',
+    primary: 'btn-primary',
+    danger: 'btn-danger',
     amber: 'bg-[#f59e0b] text-[#1f1300]',
-    quiet: 'bg-[#eceae0] text-[#14201d] border border-[#cfcabb]',
+    quiet: 'btn-quiet',
   }[tone];
   return (
     <button
@@ -67,9 +82,9 @@ export function ErrorNote({ message }: { message: string }) {
 }
 
 const VERDICT_STYLE = {
-  danger: { box: 'border-[#b42318] bg-[#fef3f2]', head: 'text-[#7a271a]', icon: '⛔', title: 'Danger' },
-  caution: { box: 'border-[#b45309] bg-[#fffbeb]', head: 'text-[#78350f]', icon: '⚠️', title: 'Be careful' },
-  no_known_issues: { box: 'border-[#166534] bg-[#f0fdf4]', head: 'text-[#14532d]', icon: '✔️', title: 'No known problems found' },
+  danger: { box: 'verdict-danger', head: 'text-[#ff8a80]', icon: '⛔', title: 'Danger' },
+  caution: { box: 'verdict-caution', head: 'text-[#fbbf24]', icon: '⚠️', title: 'Be careful' },
+  no_known_issues: { box: 'verdict-ok', head: 'text-[#5fd3a5]', icon: '✔️', title: 'No known problems found' },
 } as const;
 
 export function VerdictCard({ verdict }: { verdict: Verdict }) {
@@ -161,7 +176,7 @@ export function ConfirmSheet({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
       <div role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-body"
-        className="w-full max-w-md rounded-3xl bg-white p-6">
+        className="s-card w-full max-w-md rounded-3xl p-6">
         <h3 id="confirm-title" className="text-[1.4em] font-extrabold">{title}</h3>
         <p id="confirm-body" className="mt-2 text-[1.05em]">{body}</p>
         <div className="mt-5 space-y-3">
