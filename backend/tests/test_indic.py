@@ -99,3 +99,13 @@ def test_english_and_links_are_untouched_by_the_gloss():
     assert gloss(text) == text
     mixed = "केवाईसी अपडेट करें https://sbi-kyc-update.in/verify"
     assert analyze_message(mixed).web_urls == ["https://sbi-kyc-update.in/verify"]
+
+
+def test_electricity_bill_scam_is_high_but_a_maintenance_notice_is_not():
+    scam = ("Dear Consumer, your electricity power will be disconnected tonight at 9.30 PM because your previous month "
+            "bill was not updated. Please immediately contact our electricity officer on 9123456780")
+    assert level(scam, live=False) == "high"
+    hindi = "प्रिय उपभोक्ता, आज रात आपकी बिजली काट दी जाएगी। तुरंत हमारे अधिकारी को 9123456780 पर कॉल करें"
+    assert level(hindi, live=False) == "high"
+    notice = "BESCOM: power cut tonight 10 PM to 12 AM in your area for maintenance work. Sorry for the inconvenience."
+    assert level(notice, live=False) in ("info", "low")

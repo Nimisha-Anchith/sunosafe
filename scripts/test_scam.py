@@ -136,11 +136,18 @@ def do_sms() -> bool:
     return 200 <= status < 300
 
 
-def adb_connected() -> bool:
+def adb_serial() -> str | None:
+    """The first connected, ready device (ignores offline emulators)."""
     if not ADB.is_file():
-        return False
+        return None
     r = subprocess.run([str(ADB), "devices"], capture_output=True, text=True, timeout=15)
-    return any(line.endswith("	device") for line in r.stdout.splitlines())
+    ready = [line.split("	")[0] for line in r.stdout.splitlines() if line.endswith("	device")]
+    phones = [d for d in ready if not d.startswith("emulator-")]
+    return (phones or ready or [None])[0]
+
+
+def adb_connected() -> bool:
+    return adb_serial() is not None
 
 
 def do_notify() -> bool:
@@ -148,7 +155,11 @@ def do_notify() -> bool:
         print("  adb not found at", ADB)
         return False
     text = scam_text().replace("'", "")
-    cmd = [str(ADB), "shell", f"cmd notification post -S bigtext -t 'VM-SBIKYC' sunosafe-test '{text}'"]
+    serial = adb_serial()
+    if serial is None:
+        print("NOTIFY-> no phone connected over USB")
+        return False
+    cmd = [str(ADB), "-s", serial, "shell", f"cmd notification post -S bigtext -t 'VM-SBIKYC' sunosafe-test '{text}'"]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     ok = r.returncode == 0
     print("NOTIFY-> " + ("posted on the phone (needs the debug companion and USB debugging)" if ok

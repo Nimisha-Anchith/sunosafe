@@ -109,6 +109,11 @@ def assess(codes: set[str], disclosures: set[str] | None = None,
         fire("R11_same_scam_by_message_and_call", "high",
              "The same scam reached you by message and by a phone call, a common two-step trick.",
              ["same_scam_story_by_call"])
+    if "electricity_disconnection" in codes and "asks_to_call_number" in codes:
+        fire("R16_electricity_bill_scam", "high",
+             "It threatens to cut your electricity and asks you to call a number: the electricity bill scam. "
+             "Electricity boards never ask you to call a private number; check your bill in the official app.",
+             ["electricity_disconnection", "asks_to_call_number"])
     if "authority_threat" in codes and "asks_for_payment" in codes:
         fire("R13_authority_demands_payment", "high",
              "It uses police, court or government threats and demands money, the 'digital arrest' scam. "
