@@ -472,9 +472,31 @@ class SunoSafeService:
         if d is None:
             return None
         channels = self._incident_channels(incident_id)
-        brand = next((BRANDS[i["value"]].name for i in d["indicators"]
-                      if i["kind"] == "brand" and i["value"] in BRANDS), None)
-        return phrases.voice_greeting(lang, d["severity"], brand, "call" in channels and "message" in channels)
+        brand, topic = self._latest_story(d["events"])
+        return phrases.voice_greeting(lang, d["severity"], brand, "call" in channels and "message" in channels, topic)
+
+    @staticmethod
+    def _latest_story(events: list[dict]) -> tuple[str | None, str | None]:
+        """Brand claimed and topic of the most recent suspicious message or call (one incident can hold several
+        stories from the same scammer number)."""
+        kinds = ("message_analysed", "call_shielded", "call_reported")
+        latest = [e for e in events if e["type"] in kinds and e.get("level") and
+                  LEVELS.index(e["level"]) >= LEVELS.index("medium")]
+        if not latest:
+            return None, None
+        ev = max(latest, key=lambda e: (e["ts"], e["id"]))
+        data = ev.get("data") or {}
+        text, codes = data.get("text") or data.get("description") or "", set(data.get("codes") or [])
+        brand = next((BRANDS[k].name for k in analyze_message(text).brands if k in BRANDS), None) if text else None
+        if "authority_threat" in codes:
+            topic = "police"
+        elif "electricity_disconnection" in codes:
+            topic = "electricity"
+        elif "too_good_to_be_true" in codes:
+            topic = "prize"
+        else:
+            topic = None
+        return brand, topic
 
     def report_scam(self, description: str, disclosed: list[str], amount_lost: float | None = None,
                     incident_id: int | None = None) -> dict:

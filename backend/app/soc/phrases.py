@@ -138,14 +138,30 @@ def plain_greeting(lang: str) -> str:
     return t["plain"] if t else "Namaste, I am SunoSafe. You can ask me about a message, a link or a call."
 
 
-def voice_greeting(lang: str, severity: str, brand: str | None, by_message_and_call: bool) -> str:
-    """First thing the voice agent says when opened from a SunoSafe warning."""
+# What a scam was about, when no company name was claimed (used in the voice agent's first sentence).
+TOPICS = {
+    "police": {"en": "about a fake police or customs case", "hi": "नकली पुलिस या कस्टम केस के बारे में ",
+               "ml": "വ്യാജ പോലീസ് അല്ലെങ്കിൽ കസ്റ്റംസ് കേസിനെക്കുറിച്ച് ", "kn": "ನಕಲಿ ಪೊಲೀಸ್ ಅಥವಾ ಕಸ್ಟಮ್ಸ್ ಪ್ರಕರಣದ ಬಗ್ಗೆ ",
+               "ta": "போலி காவல்துறை அல்லது சுங்க வழக்கு பற்றி "},
+    "electricity": {"en": "about cutting your electricity", "hi": "बिजली काटने के बारे में ",
+                    "ml": "വൈദ്യുതി വിച്ഛേദിക്കുന്നതിനെക്കുറിച്ച് ", "kn": "ವಿದ್ಯುತ್ ಕಡಿತದ ಬಗ್ಗೆ ",
+                    "ta": "மின்சாரம் துண்டிப்பு பற்றி "},
+    "prize": {"en": "about a prize or refund", "hi": "इनाम या रिफंड के बारे में ", "ml": "സമ്മാനം അല്ലെങ്കിൽ റീഫണ്ടിനെക്കുറിച്ച് ",
+              "kn": "ಬಹುಮಾನ ಅಥವಾ ರಿಫಂಡ್ ಬಗ್ಗೆ ", "ta": "பரிசு அல்லது பணம் திரும்பப் பெறுவது பற்றி "},
+}
+
+
+def voice_greeting(lang: str, severity: str, brand: str | None, by_message_and_call: bool,
+                   topic: str | None = None) -> str:
+    """First thing the voice agent says when opened from a SunoSafe warning.
+    `brand` = the company the latest scam claimed to be; otherwise `topic` = what it was about."""
     t = _T.get(lang)
+    about = TOPICS.get(topic or "", {}).get(lang) if not brand else None
     if t:
-        who = t["who"].format(brand=brand) if brand else ""
+        who = t["who"].format(brand=brand) if brand else (about or "")
         story = (t["story_both"] if by_message_and_call else t["story_one"]).format(who=who)
         return t["greeting"].format(story=story)
-    who = f" pretending to be {brand}" if brand else ""
+    who = f" pretending to be {brand}" if brand else (f" {about}" if about else "")
     if by_message_and_call:
         story = f"A message and a phone call{who} reached you, and they look like the same scam."
     else:

@@ -202,3 +202,14 @@ def test_llm_endpoint_parameters_are_validated(svc, monkeypatch):
         assert "practice drill" in c.get("/api/voice/drill-greeting").json()["greeting"]
     finally:
         main.app.dependency_overrides.clear()
+
+
+def test_voice_brief_describes_the_latest_story_not_the_first(svc):
+    first = svc.analyze_message(FAKE_KYC)                      # SBI story, contains 9876543210
+    courier = ("FedEx: your parcel is held by customs, a police case will be filed. Call our officer on "
+               "9876543210 and pay the fine to avoid arrest.")
+    second = svc.analyze_message(courier)                      # same number -> same incident
+    assert second["incident_id"] == first["incident_id"]
+    text = svc.voice_brief(first["incident_id"], "en")
+    assert "police or customs" in text and "State Bank" not in text
+    assert "पुलिस" in svc.voice_brief(first["incident_id"], "hi")
