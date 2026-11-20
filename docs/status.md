@@ -87,3 +87,21 @@ Legend: ✅ Implemented & tested · 🟡 Implemented, untested · 📋 Planned �
 | Messages / calls | Scam rules on Hindi, Malayalam, Kannada and Tamil script (word lists in `app/security/indic.py`), incl. "do not share" forms; card-number, "code sent to your phone", lottery-fee and digital-arrest payment rules (R13–R15) | ✅ | `tests/test_indic.py`. Malayalam, Kannada, Tamil lists not reviewed by a native speaker |
 | Voice | Spoken phone warnings with Murf Falcon in 5 languages (`/device/speech/<id>`), phone voice only as fallback | ✅ backend / 🟡 phone | Audio fetched through the tunnel in all 5 languages; playback on the S24 not yet tested |
 | Android | Companion 0.3.0: Murf audio playback, 5-language picker, call-shield alert poller | 🟡 Built, compiles | Not yet installed on the S24 |
+
+## Update 21 Nov 2026 — current state (supersedes earlier rows where they differ)
+
+| Area | Feature | Status | Evidence |
+|---|---|---|---|
+| Android | Notification warning spoken with Murf voice, 5 languages | ✅ | S24: warnings spoken; all 5 voice samples heard by the user |
+| Android | Caller check while ringing (number from an earlier scam message) | ✅ | S24 log "Warned you about a call from a number seen in a scam message" during Vobiz test calls (bank and courier stories) |
+| Android | New-SMS reader, SMS inbox scan | 🟡 | Permission granted, inbox scan ran once; not yet confirmed with a real incoming scam SMS |
+| Android | Screen checking (WhatsApp/SMS opened or scrolled) | 🟡 | Enabled; screens scanned on the S24; a warning from on-screen text not yet confirmed |
+| Android | Share → SunoSafe / check copied message | 🟡 | Built, not yet tested on the phone |
+| Android | Always-on protection service, restart on boot, shared dedupe | ✅ service running | `dumpsys` on the S24 |
+| Web | Phone Chrome voice: microphone sent silence (ENABLE_AUDIO_PTS set after the connection existed) | 🟡 fixed, not yet confirmed | Laptop voice works |
+| Calls | Agora phone agent with SunoSafe screening tool | ✅ in an RTC voice test | Tool called twice, `call_shielded` high, alert queued |
+| Calls | Real calls to the Vobiz number reaching the phone agent | ❌ | Zero Agora sessions; Preview-platform inbound address not documented |
+| Rules | Native-script rules hi/ml/kn/ta; R12–R16 (incl. electricity-bill scam) | ✅ | `tests/test_indic.py` |
+| Voice | Agent greeting describes the latest story in an incident | ✅ | `tests/test_intervention.py` |
+| Hosting | Backend on Render (token-locked), website on Vercel | ✅ backend checked from outside; website deployed (login page and refusals checked) | |
+| Tests | Backend | ✅ 306 passing | `pytest -q` |
