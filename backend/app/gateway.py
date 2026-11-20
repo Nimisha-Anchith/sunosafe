@@ -301,14 +301,28 @@ _TEST_CALL = {
         "Please hurry, I only have two minutes. Just read out the six digit OTP.",
     ]),
 }
+# Second test story: courier parcel held by "customs", fake police case, pay a fine.
+_TEST_CALL_COURIER = {
+    "hi": ("hi-IN", [
+        "नमस्ते, मैं कूरियर कंपनी से बोल रहा हूँ। आपके नाम के पार्सल में गैरकानूनी सामान मिला है और कस्टम विभाग ने उसे रोक लिया है। क्या आप सुन रहे हैं?",
+        "अब यह मामला पुलिस के पास जा रहा है। गिरफ्तारी से बचने के लिए आपको अभी पचास हज़ार रुपये जुर्माना ट्रांसफर करना होगा।",
+        "किसी को बताइए मत, नहीं तो केस और बढ़ेगा। जल्दी कीजिए, मैं अभी आपको खाता नंबर भेजता हूँ।",
+    ]),
+    "en": ("en-IN", [
+        "Hello, I am calling from the courier company. A parcel in your name has illegal items and customs has stopped it. Are you listening?",
+        "This case is now going to the police. To avoid arrest you must transfer a fine of fifty thousand rupees right now.",
+        "Do not tell anyone or the case will get worse. Hurry, I am sending you the account number now.",
+    ]),
+}
 _END = {"hi": "ठीक है, मैं आपको बाद में फिर कॉल करूँगा।", "en": "Fine, I will call you again later."}
 
 
 @app.api_route("/demo/scam-call.xml", methods=["GET", "POST"], include_in_schema=False)
-def demo_scam_call(lang: str = Query(default="hi", pattern=r"^(hi|en)$")) -> Response:
+def demo_scam_call(lang: str = Query(default="hi", pattern=r"^(hi|en)$"),
+                   topic: str = Query(default="bank", pattern=r"^(bank|courier)$")) -> Response:
     """A pushy test 'scammer': speaks, waits while you answer (Wait in silence mode ends when you stop
     talking), pushes again for the OTP, then hangs up."""
-    locale, lines = _TEST_CALL[lang]
+    locale, lines = (_TEST_CALL_COURIER if topic == "courier" else _TEST_CALL)[lang]
     parts = ['<?xml version="1.0" encoding="UTF-8"?><Response><Wait length="1"/>']
     for line in lines:
         parts.append(f'<Speak voice="MAN" language="{locale}">{line}</Speak>')

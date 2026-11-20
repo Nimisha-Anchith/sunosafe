@@ -4,6 +4,7 @@ No AI involved; plain Python standard library. It only ever contacts YOUR OWN nu
 (TEST_TARGET_NUMBER), so it cannot be used to message anyone else.
 
     python scripts/test_scam.py call              # scam message first, then 20 s later the scam call (Hindi)
+    python scripts/test_scam.py call --topic=courier   # different story: parcel held by customs, police, fine
     python scripts/test_scam.py call --call-only  # only the call (no warning while ringing: number unknown)
     python scripts/test_scam.py call --lang=en    # same, English
     python scripts/test_scam.py sms               # Vobiz sends the scam SMS (India: needs DLT, see below)
@@ -90,16 +91,23 @@ def vobiz(path: str, body: dict) -> tuple[int, str]:
         return 0, str(e.reason)
 
 
+TOPIC = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--topic=")), "bank")
+
+
 def scam_text() -> str:
+    number = spoken(e164("VOBIZ_NUMBER"))
+    if TOPIC == "courier":
+        return (f"FedEx: Your parcel is held by customs because illegal items were found in it. A police case will be "
+                f"filed today. Call our officer immediately on {number} and pay the fine to avoid arrest.")
     return (f"Dear SBI customer, your account will be BLOCKED today. Update KYC at "
-            f"https://wrong.host.badssl.com/kyc and share the OTP. Call {spoken(e164('VOBIZ_NUMBER'))}")
+            f"https://wrong.host.badssl.com/kyc and share the OTP. Call {number}")
 
 
 def xml_url(lang: str) -> str:
     if E.get("TEST_CALL_XML_URL"):
         return E["TEST_CALL_XML_URL"]
     base = E.get("SUNOSAFE_PUBLIC_GATEWAY", "").rstrip("/") or         need("NEXT_SUNOSAFE_LLM_URL").split("?")[0].removesuffix("/llm/chat/completions")
-    return base + f"/demo/scam-call.xml?lang={lang}"
+    return base + f"/demo/scam-call.xml?lang={lang}&topic={TOPIC}"
 
 
 def do_call(lang: str) -> bool:
@@ -159,7 +167,7 @@ def do_notify() -> bool:
     if serial is None:
         print("NOTIFY-> no phone connected over USB")
         return False
-    cmd = [str(ADB), "-s", serial, "shell", f"cmd notification post -S bigtext -t 'VM-SBIKYC' sunosafe-test '{text}'"]
+    cmd = [str(ADB), "-s", serial, "shell", f"cmd notification post -S bigtext -t '{"VM-FEDEX" if TOPIC == "courier" else "VM-SBIKYC"}' sunosafe-test-{TOPIC} '{text}'"]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     ok = r.returncode == 0
     print("NOTIFY-> " + ("posted on the phone (needs the debug companion and USB debugging)" if ok
@@ -170,6 +178,8 @@ def do_notify() -> bool:
 def main() -> None:
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     lang = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--lang=")), "hi")
+    if TOPIC not in ("bank", "courier"):
+        sys.exit("--topic must be bank or courier")
     if lang not in ("hi", "en"):
         sys.exit("--lang must be hi or en")
     action = args[0] if args else ""
