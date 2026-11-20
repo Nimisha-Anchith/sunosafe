@@ -44,6 +44,11 @@ def _fixed_phrases() -> dict[str, tuple[str, str]]:
     """Sentences that never change, so the phone can ask for them by name (and keep the audio)."""
     out = {fixed_id("call-watch", lang): (phrases.call_alert(lang), lang) for lang in phrases.SUPPORTED}
     out.update({fixed_id("voice-sample", lang): (phrases.plain_greeting(lang), lang) for lang in phrases.SUPPORTED})
+    # Fixed message warnings (every language except English, whose warning is the engine's own summary).
+    for lang in phrases.SUPPORTED:
+        if lang != "en":
+            out[fixed_id("msg-high", lang)] = (phrases.message_alert(lang, "high", ""), lang)
+            out[fixed_id("msg-medium", lang)] = (phrases.message_alert(lang, "medium", ""), lang)
     return out
 
 
@@ -51,6 +56,10 @@ def register(text: str, lang: str, now: float | None = None) -> str:
     """Remember a sentence SunoSafe is about to show the user; return the id for its audio."""
     now = time.monotonic() if now is None else now
     text = text[:MAX_TEXT]
+    # A fixed sentence gets its fixed id, so the phone can use the copy it fetched in advance.
+    for fid, (ftext, flang) in _fixed_phrases().items():
+        if flang == lang and ftext == text:
+            return fid
     sid = "d" + hashlib.sha256(f"{lang}\n{text}".encode()).hexdigest()[:20]
     with _lock:
         _ids[sid] = (text, lang, now + ID_TTL)

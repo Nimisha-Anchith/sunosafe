@@ -36,6 +36,13 @@ class ProtectionService : Service() {
         else startForeground(ID, note)
         poller = Executors.newSingleThreadScheduledExecutor().also {
             it.scheduleWithFixedDelay({ poll() }, 3, POLL_SECONDS, TimeUnit.SECONDS)
+            // Warnings in the chosen language, fetched in advance so they play instantly (cached on the phone).
+            it.execute {
+                val lang = Prefs.lang(applicationContext)
+                if (Prefs.isPaired(applicationContext)) {
+                    for (id in listOf("call-watch-$lang", "msg-high-$lang", "msg-medium-$lang")) Backend.fetchSpeech(applicationContext, id)
+                }
+            }
         }
     }
 

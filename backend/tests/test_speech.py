@@ -113,3 +113,10 @@ def test_expired_ids_stop_working():
 def test_murf_down_gives_503_so_phone_uses_its_own_voice(client, monkeypatch):
     monkeypatch.setattr(gateway, "get_settings", lambda: _settings())
     assert client.get("/device/speech/call-watch-hi", headers=DEVICE).status_code == 503
+
+
+def test_fixed_message_warnings_reuse_the_audio_the_phone_fetched_in_advance():
+    assert speech.register(phrases.message_alert("hi", "high", "x"), "hi") == "msg-high-hi"
+    assert speech.register(phrases.message_alert("ta", "medium", "x"), "ta") == "msg-medium-ta"
+    assert speech.lookup("msg-high-kn") is not None and speech.lookup("msg-high-en") is None
+    assert speech.register("an English summary that changes", "en").startswith("d")

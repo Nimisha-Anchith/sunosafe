@@ -69,7 +69,10 @@ class MainActivity : Activity() {
         if (Prefs.isPaired(this)) {
             val app = applicationContext
             val lang = Prefs.lang(app)
-            Thread { Backend.fetchSpeech(app, "call-watch-$lang") }.start()
+            // Fetch the standard warnings in advance, so a warning speaks instantly instead of after 1-2 s.
+            Thread {
+                for (id in listOf("call-watch-$lang", "msg-high-$lang", "msg-medium-$lang")) Backend.fetchSpeech(app, id)
+            }.start()
         }
     }
 
