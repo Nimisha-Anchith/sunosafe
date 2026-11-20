@@ -24,7 +24,6 @@ const SOURCE_LABELS: Record<string, string> = {
   'message_rules/sms': 'SMS (read by SunoSafe)',
   'message_rules/share': 'message you shared',
   'call_shield': 'SunoSafe call assistant',
-  'message_rules/share': 'shared message',
   'message_rules/paste': 'pasted message',
   'message_rules/voice': 'spoken message',
   investigator: 'link investigator',
