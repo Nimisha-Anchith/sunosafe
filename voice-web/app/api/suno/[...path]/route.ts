@@ -9,7 +9,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND = (process.env.SUNOSAFE_BACKEND_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
+import { BACKEND, backendHeaders } from '@/lib/suno/backend';
 const MAX_BODY_BYTES = 20 * 1024;
 
 type Rule = { method: string; pattern: RegExp };
@@ -63,7 +63,7 @@ async function forward(request: NextRequest, segments: string[]) {
     const query = path === 'dashboard' && Number.isInteger(days) && days >= 1 && days <= 30 ? `?days=${days}` : '';
     const upstream = await fetch(`${BACKEND}/api/${path}${query}`, {
       method: request.method,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      headers: backendHeaders(Boolean(body)),
       body,
       cache: 'no-store',
       signal: AbortSignal.timeout(30_000),

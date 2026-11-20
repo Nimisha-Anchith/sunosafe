@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="SunoTheme" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:colorPrimary">#134E4A</item>
-        <item name="android:colorAccent">#134E4A</item>
-        <item name="android:statusBarColor">#134E4A</item>
-        <item name="android:windowBackground">@android:color/white</item>
+    <!-- Night-green theme, matching the SunoSafe web app. -->
+    <style name="SunoTheme" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorPrimary">#10B981</item>
+        <item name="android:colorAccent">#34D399</item>
+        <item name="android:statusBarColor">#07130F</item>
+        <item name="android:navigationBarColor">#07130F</item>
+        <item name="android:windowBackground">@color/suno_bg</item>
+        <item name="android:textColorPrimary">#E7F3EE</item>
+        <item name="android:textColorSecondary">#93ADA5</item>
     </style>
+    <color name="suno_bg">#07130F</color>
 </resources>

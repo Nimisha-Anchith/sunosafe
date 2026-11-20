@@ -13,6 +13,7 @@ import {
 } from 'agora-agents';
 import { ClientStartRequest, AgentResponse } from '@/types/conversation';
 import { DEFAULT_AGENT_UID } from '@/lib/agora';
+import { BACKEND, backendHeaders } from '@/lib/suno/backend';
 
 // System prompt that defines the agent's personality and behavior.
 // Swap this out to change what the agent talks about.
@@ -104,7 +105,7 @@ function sunoSafeLlmConfigured(): boolean {
 
 type Lang = 'en' | 'hi' | 'ml' | 'kn' | 'ta';
 const LANGS: Lang[] = ['en', 'hi', 'ml', 'kn', 'ta'];
-const BACKEND = (process.env.SUNOSAFE_BACKEND_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
+
 
 type VoicePlan = { incident?: number; mode: 'guard' | 'drill' | 'shield'; lang: Lang; greeting: string };
 
@@ -120,7 +121,7 @@ async function planVoice(body: ClientStartRequest): Promise<VoicePlan> {
       : !incident ? `/api/voice/greeting?lang=${lang}`
       : incident ? `/api/incidents/${incident}/voice-brief?lang=${lang}` : null;
     if (path) {
-      const r = await fetch(BACKEND + path, { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+      const r = await fetch(BACKEND + path, { cache: 'no-store', headers: backendHeaders(), signal: AbortSignal.timeout(8000) });
       if (r.ok) greeting = ((await r.json()) as { greeting: string }).greeting.slice(0, 600);
     }
   } catch {

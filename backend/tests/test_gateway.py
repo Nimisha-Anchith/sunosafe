@@ -182,3 +182,12 @@ def test_inbox_written_by_private_app_is_visible_to_gateway(svc, client):
     assert main._load_inbox(svc)["text"] == FAKE_KYC
     svc.store.clear_inbox()
     assert main._load_inbox(svc) == {}
+
+
+def test_messages_read_on_screen_are_recorded_with_their_source(client, svc):
+    body = {**NOTE, "source": "screen"}
+    out = client.post("/device/notifications", json=body, headers=DEVICE).json()
+    assert out["alert"] is True
+    ev = next(e for e in svc.store.recent_events(50) if e["type"] == "message_analysed")
+    assert ev["source"] == "message_rules/screen"
+    assert client.post("/device/notifications", json={**NOTE, "source": "hacked"}, headers=DEVICE).status_code == 422

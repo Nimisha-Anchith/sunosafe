@@ -87,6 +87,15 @@ const AgoraProvider = dynamic(
               setParameter?: (key: string, value: unknown) => void;
             }
           ).setParameter?.('ENABLE_PREALLOC_PC', false);
+          // Transcript timing (audio PTS) needs WebRTC "encoded streams". On phones the
+          // browser blocks them and the microphone then sends silence, so keep it on
+          // for desktop only. It must be decided before createClient (see ConversationComponent).
+          const isPhone = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+          (
+            AgoraRTC as unknown as {
+              setParameter?: (key: string, value: unknown) => void;
+            }
+          ).setParameter?.('ENABLE_AUDIO_PTS', !isPhone);
           guardSetConfiguration();
           clientRef.current = AgoraRTC.createClient({
             mode: 'rtc',

@@ -1,0 +1,33 @@
+# Render Blueprint for the SunoSafe backend (private API + public gateway in one service).
+# Render asks for every "sync: false" value when the Blueprint is created. Paste them from
+# backend/.env on the laptop; never commit them.
+services:
+  - type: web
+    name: sunosafe-backend
+    runtime: python
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.hosted:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips '*'
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: SUNOSAFE_DB
+        value: /tmp/sunosafe.db
+      - key: API_TOKEN          # the web app sends this to the private API
+        sync: false
+      - key: GATEWAY_TOKEN      # Agora's voice agent and phone agent send this
+        sync: false
+      - key: DEVICE_TOKEN       # the Android companion sends this
+        sync: false
+      - key: GROQ_API_KEY       # the voice agent's language model
+        sync: false
+      - key: MURF_API_KEY       # spoken phone warnings
+        sync: false
+      - key: GEMINI_API_KEY     # optional fallback model
+        sync: false
+      - key: SAFE_BROWSING_API_KEY   # optional
+        sync: false

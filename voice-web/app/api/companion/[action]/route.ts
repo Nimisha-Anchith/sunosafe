@@ -12,15 +12,7 @@ import { createReadStream, statSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import { NextRequest, NextResponse } from 'next/server';
 
-function gatewayBase(): string | null {
-  const llm = process.env.NEXT_SUNOSAFE_LLM_URL;
-  if (!llm) return null;
-  try {
-    return new URL(llm).origin;
-  } catch {
-    return null;
-  }
-}
+import { gatewayBase } from '@/lib/suno/backend';
 
 type Context = { params: Promise<{ action: string }> };
 
@@ -41,6 +33,9 @@ export async function GET(request: NextRequest, context: Context) {
   }
 
   if (action === 'apk') {
+    // Hosted: the install file lives at a download link (e.g. a GitHub release).
+    const url = process.env.SUNOSAFE_APK_URL;
+    if (url && url.startsWith('https://')) return NextResponse.redirect(url, 302);
     const path = process.env.SUNOSAFE_APK_PATH;
     try {
       if (!path) throw new Error('not configured');

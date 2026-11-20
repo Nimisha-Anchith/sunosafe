@@ -148,6 +148,8 @@ class DeviceNotification(BaseModel):
     text: str = Field(..., min_length=1, max_length=4000, description="The notification text Android exposes")
     device_id: str = Field(..., min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
     lang: str = Field(default="en", pattern=r"^(en|hi|ml|kn|ta)$")
+    source: str = Field(default="notification", pattern=r"^(notification|screen)$",
+                        description="notification = a new notification; screen = a message the user opened or scrolled")
 
 
 class DeviceCall(BaseModel):
@@ -180,7 +182,7 @@ def device_notification(item: DeviceNotification,
     if previous is not None:
         return {**previous, "duplicate": True}
 
-    out = svc.analyze_message(item.text, sender=item.title or None, source="notification")
+    out = svc.analyze_message(item.text, sender=item.title or None, source=item.source)
     verdict = out["verdict"]
     alert = verdict["label"] != "no_known_issues" and verdict["level"] in ("medium", "high", "critical")
     answer = {

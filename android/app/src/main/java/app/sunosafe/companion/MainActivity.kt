@@ -35,16 +35,22 @@ class MainActivity : Activity() {
     private lateinit var statusTitle: TextView
     private lateinit var statusBody: TextView
     private lateinit var stats: TextView
-    private val teal = Color.parseColor("#0F3D3A")
-    private val tealMid = Color.parseColor("#134E4A")
+    private val bg = Color.parseColor("#07130F")
+    private val surface = Color.parseColor("#11251F")
+    private val elev = Color.parseColor("#17322A")
+    private val border = Color.parseColor("#1F3B33")
+    private val green = Color.parseColor("#34D399")
+    private val tealMid = Color.parseColor("#10B981")
+    private val onGreen = Color.parseColor("#031B13")
     private val amber = Color.parseColor("#F59E0B")
-    private val ink = Color.parseColor("#14201D")
-    private val muted = Color.parseColor("#4B5A56")
+    private val ink = Color.parseColor("#E7F3EE")
+    private val muted = Color.parseColor("#93ADA5")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Alerts.ensureChannel(this)
-        window.statusBarColor = teal
+        window.statusBarColor = bg
+        window.navigationBarColor = bg
         setContentView(buildScreen())
         handlePairingLink(intent)
     }
@@ -110,6 +116,11 @@ class MainActivity : Activity() {
         Build.VERSION.SDK_INT < 33 ||
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
+    private fun screenReaderOn(): Boolean {
+        val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+        return enabled.split(":").any { it.startsWith("$packageName/") }
+    }
+
     private fun screeningRoleHeld(): Boolean =
         Build.VERSION.SDK_INT >= 29 &&
             getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_CALL_SCREENING) == true
@@ -124,11 +135,17 @@ class MainActivity : Activity() {
             append("${mark(listenerEnabled())}  Notification access\n")
             append("${mark(warningsAllowed())}  Allowed to show warnings\n")
             append("${mark(Prefs.isPaired(this@MainActivity))}  Connected to your SunoSafe\n")
-            append("${mark(screeningRoleHeld())}  Checking incoming callers")
+            append("${mark(screeningRoleHeld())}  Checking incoming callers\n")
+            append("${mark(screenReaderOn())}  Checking messages on screen (WhatsApp, SMS)")
         }
-        (statusCard.background as GradientDrawable).setColor(
-            if (watching) Color.parseColor("#DCFCE7") else Color.parseColor("#FEF3C7"))
+        (statusCard.background as GradientDrawable).apply {
+            setColor(if (watching) Color.parseColor("#0F2E24") else Color.parseColor("#2A2210"))
+            setStroke(dp(1), if (watching) green else amber)
+        }
+        statusTitle.setTextColor(if (watching) green else Color.parseColor("#FBBF24"))
         stats.text = "Messages looked at on this phone: ${Prefs.count(this, "seen")}\n" +
+            "Screens checked in WhatsApp/SMS: ${Prefs.count(this, "screen_scans")} " +
+            "(warnings: ${Prefs.count(this, "screen_alerts")})\n" +
             "Hidden by the app (could not check): ${Prefs.count(this, "hidden")}\n" +
             "Sent for a full check: ${Prefs.count(this, "sent")}\n" +
             "Message warnings: ${Prefs.count(this, "alerts")}\n" +
@@ -210,12 +227,13 @@ class MainActivity : Activity() {
             setLineSpacing(0f, 1.15f)
         }
 
-    private fun button(label: String, bg: Int = tealMid, fg: Int = Color.WHITE, onClick: () -> Unit) = Button(this).apply {
+    private fun button(label: String, bg: Int = tealMid, fg: Int = onGreen, onClick: () -> Unit) = Button(this).apply {
         text = label
         textSize = 17f
         isAllCaps = false
         setTextColor(fg)
-        background = rounded(bg, 18)
+        background = rounded(bg, 18, if (bg == elev) border else null)
+        setTypeface(typeface, Typeface.BOLD)
         minimumHeight = dp(60)
         setPadding(dp(16), dp(10), dp(16), dp(10))
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -234,7 +252,7 @@ class MainActivity : Activity() {
 
     private fun card(title: String, vararg children: View): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        background = rounded(Color.WHITE, 22, Color.parseColor("#E2DED1"))
+        background = rounded(surface, 22, border)
         setPadding(dp(18), dp(16), dp(18), dp(18))
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             .apply { topMargin = dp(14) }
@@ -245,18 +263,32 @@ class MainActivity : Activity() {
     private fun buildScreen(): View {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#F5F3EC"))
+            setBackgroundColor(bg)
         }
 
         // Header
         val header = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(teal, tealMid))
-            setPadding(dp(22), dp(26), dp(22), dp(26))
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(18), dp(22), dp(18), dp(14))
         }
-        header.addView(text("SunoSafe", 32f, bold = true, color = Color.WHITE))
-        header.addView(text("Hear the warning. Understand the threat. Take action.", 16f, color = Color.parseColor("#CDE7E2")))
+        header.addView(TextView(this).apply {
+            text = "🛡"
+            textSize = 26f
+            gravity = Gravity.CENTER
+            background = rounded(Color.parseColor("#123A2E"), 14)
+            layoutParams = LinearLayout.LayoutParams(dp(52), dp(52)).apply { marginEnd = dp(14) }
+        })
+        header.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(text("SunoSafe", 26f, bold = true))
+            addView(text("AI Call Shield", 15f, color = muted))
+        })
         root.addView(header)
+        root.addView(View(this).apply {
+            setBackgroundColor(border)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1))
+        })
 
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -267,7 +299,7 @@ class MainActivity : Activity() {
         statusBody = text("", 17f)
         statusCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(Color.parseColor("#FEF3C7"), 22)
+            background = rounded(Color.parseColor("#2A2210"), 22, amber)
             setPadding(dp(18), dp(16), dp(18), dp(16))
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = dp(16) }
@@ -276,14 +308,36 @@ class MainActivity : Activity() {
         }
         column.addView(statusCard)
 
+        fun tile(icon: String, label: String, path: String) = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            background = rounded(elev, 18, border)
+            minimumHeight = dp(96)
+            setPadding(dp(6), dp(12), dp(6), dp(12))
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(8) }
+            addView(text(icon, 24f, color = green).apply { gravity = Gravity.CENTER })
+            addView(text(label, 14f, bold = true).apply { gravity = Gravity.CENTER })
+            isClickable = true
+            setOnClickListener { openWeb(path) }
+        }
+        val tiles = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = dp(14) }
+            addView(tile("〰", "Live monitor", "/?tab=live"))
+            addView(tile("📞", "Call history", "/?tab=calls"))
+            addView(tile("📊", "SIEM dashboard", "/?tab=dashboard"))
+        }
+        column.addView(tiles)
+
         column.addView(card("Hear SunoSafe",
             text("Talk to the SunoSafe voice agent (Agora Conversational AI with a Murf Falcon voice).", 16f, color = muted),
-            button("🎤  Talk about my latest warning", amber, Color.parseColor("#1F1300")) {
+            button("🎤  Talk about my latest warning") {
                 val incident = Prefs.lastIncident(this)
                 openWeb("/talk?lang=${Prefs.lang(this)}" + if (incident > 0) "&incident=$incident" else "")
             },
-            button("🎭  Practise: scam call drill") { openWeb("/talk?mode=drill&lang=${Prefs.lang(this)}") },
-            button("📋  Open incidents and evidence", Color.parseColor("#ECEAE0"), ink) { openWeb("/?tab=incidents") },
+            button("🎭  Practise: scam call drill", elev, ink) { openWeb("/talk?mode=drill&lang=${Prefs.lang(this)}") },
+            button("📋  Open incidents and evidence", elev, ink) { openWeb("/?tab=incidents") },
         ))
 
         column.addView(card("Set up",
@@ -295,7 +349,12 @@ class MainActivity : Activity() {
             },
             text("3.  Connect: open your SunoSafe web app on this phone → Settings → \"Connect Android app\".", 16f),
             button("4.  Let SunoSafe check unknown callers") { requestScreeningRole() },
-            button("Keep SunoSafe running (battery)", Color.parseColor("#ECEAE0"), ink) {
+            button("5.  Check messages I open in WhatsApp / SMS") {
+                Toast.makeText(this, "Installed apps → SunoSafe screen checking → On. If it is greyed out: " +
+                    "App info → ⋮ → Allow restricted settings.", Toast.LENGTH_LONG).show()
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            },
+            button("Keep SunoSafe running (battery)", elev, ink) {
                 startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
             },
         ))
@@ -315,8 +374,8 @@ class MainActivity : Activity() {
                 textSize = 17f
                 isAllCaps = false
                 val chosen = Prefs.lang(this@MainActivity) == code
-                setTextColor(if (chosen) Color.WHITE else ink)
-                background = rounded(if (chosen) tealMid else Color.parseColor("#ECEAE0"), 16)
+                setTextColor(if (chosen) onGreen else ink)
+                background = rounded(if (chosen) tealMid else elev, 16, if (chosen) null else border)
                 layoutParams = LinearLayout.LayoutParams(0, dp(56), 1f).apply { marginEnd = dp(8) }
                 setOnClickListener {
                     Prefs.setLang(this@MainActivity, code)

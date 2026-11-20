@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import AgoraRTC, {
+import {
   useRTCClient,
   useLocalMicrophoneTrack,
   useRemoteUsers,
@@ -47,10 +47,6 @@ import type { ConversationComponentProps } from '@/types/conversation';
 
 // Cap the displayed issues list to avoid overwhelming the UI during a cascade of errors.
 const MAX_CONNECTION_ISSUES = 6;
-
-type AgoraRtcWithParameters = typeof AgoraRTC & {
-  setParameter?: (key: string, value: unknown) => void;
-};
 
 // Payload shape for signaling-level errors forwarded by the agent over RTM.
 // The `module` field identifies which backend subsystem (LLM / ASR / TTS) raised the error.
@@ -174,19 +170,10 @@ export default function ConversationComponent({
   // graph inside MicButtonWithVisualizer. Mute uses track.setEnabled() only.
   const { localMicrophoneTrack } = useLocalMicrophoneTrack(isReady);
 
-  // ENABLE_AUDIO_PTS is a module-level SDK parameter (not on the client instance).
-  // It must be set before publishing audio for transcript timing to be accurate.
-  useEffect(() => {
-    if (!client) return;
-    try {
-      (AgoraRTC as AgoraRtcWithParameters).setParameter?.(
-        'ENABLE_AUDIO_PTS',
-        true,
-      );
-    } catch (error) {
-      console.warn('Could not set ENABLE_AUDIO_PTS:', error);
-    }
-  }, [client]);
+  // SunoSafe: ENABLE_AUDIO_PTS (transcript timing) is now decided once in LandingPage,
+  // BEFORE the RTC client and its peer connection exist. Setting it here, after the
+  // connection was created, made Android Chrome refuse the change ("Too late to create
+  // encoded streams"), and the microphone audio never reached the agent.
 
   // Track the auto-assigned RTC UID for token renewal and agent invite.
   useEffect(() => {

@@ -4,4 +4,6 @@
     <string name="listener_label">SunoSafe scam warnings</string>
     <string name="channel_alerts">Scam warnings</string>
     <string name="channel_alerts_desc">Warnings when SunoSafe finds a suspicious message</string>
+    <string name="screen_reader_label">SunoSafe screen checking</string>
+    <string name="screen_reader_desc">Lets SunoSafe check the messages you open or scroll through in WhatsApp and SMS apps for scams. Only those apps; never passwords or what you type. Only messages with links or scam wording are sent for a full check.</string>
 </resources>

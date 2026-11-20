@@ -20,6 +20,8 @@ const EVENT_LABELS: Record<string, { icon: string; label: string }> = {
 
 const SOURCE_LABELS: Record<string, string> = {
   'message_rules/notification': 'phone notification',
+  'message_rules/screen': 'message on screen (WhatsApp/SMS)',
+  'call_shield': 'SunoSafe call assistant',
   'message_rules/share': 'shared message',
   'message_rules/paste': 'pasted message',
   'message_rules/voice': 'spoken message',

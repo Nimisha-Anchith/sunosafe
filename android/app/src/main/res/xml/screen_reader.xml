@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SunoSafe screen checking: only these messaging apps, read-only, no gestures. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeViewScrolled|typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/screen_reader_desc"
+    android:notificationTimeout="800"
+    android:packageNames="com.whatsapp,com.whatsapp.w4b,com.google.android.apps.messaging,com.samsung.android.messaging,com.android.mms,org.telegram.messenger" />

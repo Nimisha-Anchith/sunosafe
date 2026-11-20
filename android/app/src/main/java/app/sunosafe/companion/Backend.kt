@@ -64,13 +64,14 @@ object Backend {
         }
     }
 
-    fun report(c: Context, appPackage: String, title: String, text: String): Verdict? =
+    fun report(c: Context, appPackage: String, title: String, text: String, source: String = "notification"): Verdict? =
         post(c, "/device/notifications", JSONObject()
             .put("app", appPackage)
             .put("title", title.take(200))
             .put("text", text.take(4000))
             .put("device_id", Prefs.deviceId(c))
-            .put("lang", Prefs.lang(c)))
+            .put("lang", Prefs.lang(c))
+            .put("source", source))
 
     fun reportCall(c: Context, number: String?, timeoutMs: Int = 4_000): Verdict? =
         post(c, "/device/calls", JSONObject()
