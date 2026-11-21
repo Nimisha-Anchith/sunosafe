@@ -61,13 +61,7 @@ ARES (listening), Groq LLM, FastAPI + SQLite Mini-SIEM, Next.js, native Android 
   "approved by voice".
 > "No typing, no menus — Agora's voice agent with a Murf voice, in her language. Nothing happens without her yes."
 
-**[3:30 – 4:30] SunoSafe answers scam calls for her (call shield)**
-- Laptop: **Live monitor → Test it now: you play the caller**. Play the scammer: "Main SBI se bol raha hoon, OTP bataiye."
-- SunoSafe refuses calmly; Live monitor shows **Scam detected**; dashboard counter goes up.
-> "With call forwarding, calls she declines go to SunoSafe. It never reveals anything about her, screens every
-> sentence with the same rules, and tells her afterwards what happened."
-
-**[4:30 – 5:00] Close**
+**[3:30 – 4:00] Close**
 - Show Threat types + the five language buttons.
 > "SunoSafe: hear the warning, understand the threat, take action — in five Indian languages, before the money is gone."
 
@@ -79,7 +73,6 @@ Give them `https://sunosafe.vercel.app` + the PIN.
 - **Check a message** — tap *Example*, or paste any SMS/WhatsApp text (Hindi/Tamil script works).
 - **Check a link** — see where it really goes, domain age, certificate; dangerous sites get the block screen.
 - **SIEM dashboard** — every number is real; click an incident for the evidence.
-- **Live monitor → Test it now** — be the scammer.
 - **Practise: scam call drill** — SunoSafe plays a scammer to train the user.
 
 Phone-only features (show on your S24): automatic SMS/WhatsApp warnings, screen checking, Share → SunoSafe, the
@@ -114,6 +107,6 @@ written as `+91 80XXXXXXXX`, then run the `--call-only` command.
 |---|---|
 | Website slow / blank | Free server waking up: wait 30–60 s and reload. |
 | No spoken warning | Phone on silent? Volume? Status card all ✔? Show the red notification and the dashboard instead. |
-| Test call doesn't ring | Vobiz balance? Use **Live monitor → Test it now** for the call story. |
+| Test call doesn't ring | Vobiz balance? Tell the story from the dashboard incident and the phone's red notification. |
 | Voice agent won't hear on phone | Use the laptop's Talk button (it always works there). |
 | Phone not detecting | Check pairing: website → Profile → Connect Android app. |

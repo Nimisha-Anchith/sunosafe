@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { type Settings, api, talkUrl } from './api';
+import { api } from './api';
 import * as I from './icons';
 import { LEVEL_COLOR, LevelBadge } from './ui';
 
@@ -22,9 +22,6 @@ export type DashboardData = {
   live_call: (CallEntry & { seconds_ago: number; active: boolean }) | null;
 };
 
-const ASK_NAMES: Record<string, string> = {
-  otp: 'OTP', pin: 'PIN', password: 'password', remote_app: 'a remote-control app', money: 'money', card: 'card details', kyc: 'KYC update',
-};
 const DONUT = ['#f04438', '#f59e0b', '#38bdf8', '#a78bfa', '#34d399', '#f472b6', '#facc15', '#94a3b8'];
 
 /** Poll the Mini-SIEM. `every` in ms; pauses while the page is hidden. */
@@ -150,67 +147,6 @@ function Donut({ items }: { items: DashboardData['threat_types'] }) {
   );
 }
 
-// ----------------------------------------------------------------- live call
-export function LiveCallPanel({ data, settings, compact = false, onOpenIncident }: {
-  data: DashboardData | null; settings: Settings; compact?: boolean; onOpenIncident?: (id: number) => void;
-}) {
-  const live = data?.live_call;
-  if (!live) {
-    return (
-      <div className="text-center">
-        <Waveform active={false} />
-        <p className="mt-2 text-[var(--s-muted)]">No call answered by SunoSafe yet.</p>
-        {!compact && (
-          <a href={talkUrl(settings, null, 'shield')} className="btn-primary mt-4 inline-flex min-h-[3em] items-center justify-center gap-2 rounded-2xl px-5 font-bold">
-            <I.Mic size={20} /> Test it: you play the caller
-          </a>
-        )}
-      </div>
-    );
-  }
-  const scam = live.level === 'high' || live.level === 'critical';
-  return (
-    <div>
-      <div className="flex items-center justify-between gap-2">
-        <p className="font-bold">{live.active ? 'SunoSafe is answering a call' : `Last call ${timeAgo(live.ts)}`}</p>
-        {live.active && <span className="flex items-center gap-1 rounded-full bg-[#10b98122] px-2 py-0.5 text-[0.78em] font-bold text-[var(--s-green)]"><i className="s-pulse h-2 w-2 rounded-full bg-[var(--s-green)]" />Live</span>}
-      </div>
-      <Waveform active={live.active} height={compact ? 36 : 52} />
-      {!compact && live.heard && (
-        <div className="mt-3 space-y-3">
-          <div className="rounded-2xl border border-[var(--s-border)] bg-[var(--s-elev)] p-4">
-            <p className="flex items-center gap-2 text-[0.82em] font-bold text-[var(--s-muted)]"><I.User size={16} /> Caller (masked)</p>
-            {/* untrusted words: rendered as plain text only */}
-            <p className="mt-1 whitespace-pre-line">{live.heard}</p>
-          </div>
-          <div className="rounded-2xl border border-[#34d39966] bg-[#10b9811a] p-4">
-            <p className="flex items-center gap-2 text-[0.82em] font-bold text-[var(--s-green)]"><I.ShieldPulse size={16} /> SunoSafe</p>
-            <p className="mt-1">
-              {scam
-                ? 'Refused: the person never shares codes or bank details on the phone, and genuine banks never ask. The call was noted.'
-                : 'Asked who is calling and why, without sharing anything about you.'}
-            </p>
-          </div>
-        </div>
-      )}
-      {scam && (
-        <div className="mt-3 rounded-2xl border-2 border-[#f04438] bg-[#f044381a] p-4 text-center">
-          <p className="flex items-center justify-center gap-2 text-[1.25em] font-extrabold text-[#ff8a80]"><I.Alert size={22} /> Scam detected</p>
-          <p className="mt-1">{live.asked.length ? `Asked for ${live.asked.map((a) => ASK_NAMES[a] ?? a).join(', ')}` : live.threat}</p>
-          <p className="mt-1 flex items-center justify-center gap-2 text-[0.9em]">Risk <LevelBadge level={live.level} /></p>
-          {!compact && live.why.length > 0 && (
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-left text-[0.88em] text-[var(--s-muted)]">{live.why.map((w) => <li key={w}>{w}</li>)}</ul>
-          )}
-          {!compact && live.incident_id && onOpenIncident && (
-            <button type="button" onClick={() => onOpenIncident(live.incident_id as number)}
-              className="btn-quiet mt-3 min-h-[2.8em] w-full rounded-xl font-bold">See the evidence</button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ----------------------------------------------------------------- full dashboard
 const SIDE: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Overview', icon: <I.ShieldPulse size={20} /> },
@@ -219,7 +155,7 @@ const SIDE: { id: Section; label: string; icon: React.ReactNode }[] = [
 ];
 type Section = 'overview' | 'incidents' | 'calls';
 
-export function DashboardScreen({ settings, onOpenIncident }: { settings: Settings; onOpenIncident: (id: number) => void }) {
+export function DashboardScreen({ onOpenIncident }: { onOpenIncident: (id: number) => void }) {
   const [days, setDays] = useState(7);
   const [section, setSection] = useState<Section>('overview');
   const { data, error } = useDashboard(days);
@@ -242,7 +178,7 @@ export function DashboardScreen({ settings, onOpenIncident }: { settings: Settin
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-[1.6em] font-extrabold">Security overview</h2>
-            <p className="text-[var(--s-muted)]">Real-time call protection, threat detection and incident monitoring.</p>
+            <p className="text-[var(--s-muted)]">Scam messages, links and calls checked by SunoSafe, with the evidence for each incident.</p>
           </div>
           <label className="flex items-center gap-2 text-[0.9em] text-[var(--s-muted)]">
             <I.Clock size={18} />
@@ -257,7 +193,7 @@ export function DashboardScreen({ settings, onOpenIncident }: { settings: Settin
         {data && s && section === 'overview' && (
           <>
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-              <Stat icon={<I.ShieldPulse />} value={s.scams_stopped} label="Scams stopped" color="#f04438" note="calls refused + sites blocked" />
+              <Stat icon={<I.ShieldPulse />} value={s.open_incidents} label="Open incidents" color="#f04438" note="scams still needing attention" />
               <Stat icon={<I.Phone />} value={s.suspicious_calls} label="Suspicious calls" color="#34d399" note="ordinary calls are never stored" />
               <Stat icon={<I.Alert />} value={s.high_risk_incidents} label="High-risk incidents" color="#a78bfa" />
               <Stat icon={<I.Message />} value={s.messages_checked} label="Messages checked" color="#38bdf8" note={`${s.links_blocked} link${s.links_blocked === 1 ? '' : 's'} blocked`} />
@@ -266,13 +202,7 @@ export function DashboardScreen({ settings, onOpenIncident }: { settings: Settin
               <section className="s-card rounded-2xl p-5"><h3 className="mb-3 font-bold">Threats timeline</h3><Timeline data={data.timeline} /></section>
               <section className="s-card rounded-2xl p-5"><h3 className="mb-3 font-bold">Threat types</h3><Donut items={data.threat_types} /></section>
             </div>
-            <div className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
-              <IncidentTable data={data} onOpenIncident={onOpenIncident} />
-              <section className="s-card rounded-2xl p-5">
-                <h3 className="mb-2 font-bold">Live call monitor</h3>
-                <LiveCallPanel data={data} settings={settings} compact onOpenIncident={onOpenIncident} />
-              </section>
-            </div>
+            <IncidentTable data={data} onOpenIncident={onOpenIncident} />
           </>
         )}
         {data && section === 'incidents' && <IncidentTable data={data} onOpenIncident={onOpenIncident} full />}

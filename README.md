@@ -23,7 +23,7 @@ Status labels used below (evidence in [docs/status.md](docs/status.md)):
  Android companion (the user's phone)            Website (sunosafe.vercel.app, PIN lock)
   new SMS · WhatsApp/SMS notifications            Talk to SunoSafe (Agora voice agent + Murf voice)
   messages opened/scrolled on screen              check a message / a link · SIEM dashboard
-  caller check while the phone rings              incidents & evidence · recovery help · call-shield test
+  caller check while the phone rings              incidents & evidence · recovery help
   spoken warnings (Murf voice)                     │
         │ HTTPS + device token                     │ HTTPS (server side, backend token)
         ▼                                          ▼
@@ -75,9 +75,8 @@ Status labels used below (evidence in [docs/status.md](docs/status.md)):
 | **Talk to SunoSafe**: voice agent in 5 languages, briefed on an incident when opened from a warning; answers "why is it dangerous?", blocks a link only after the user's own spoken "yes" | ✅ on a laptop browser · 🟡 on phone Chrome (fix applied for silent microphone, not yet confirmed) |
 | **Check a message**: paste (or Example), verdict, warning signs, link investigation; Open WhatsApp / Messages helpers | ✅ |
 | **Check a link** and open it through SunoSafe (block screen for blocked links) | ✅ |
-| **SIEM dashboard**: counters, threats timeline, threat types, incidents, call log, live call monitor; only real stored events, nothing invented | ✅ |
+| **SIEM dashboard**: counters, threats timeline, threat types, incidents, call log; only real stored events, nothing invented | ✅ |
 | **Incidents**: evidence timeline with the source of every event, recovery steps, call 1930, report text for cybercrime.gov.in | ✅ |
-| **Call-shield test**: you play the scam caller; SunoSafe answers, screens every sentence, refuses with a fixed reviewed sentence | ✅ |
 | **Scam call practice drill** (SunoSafe plays the scammer, never collects data) | ✅ |
 | Dark night-green design, phone and desktop layouts | ✅ checked in the browser |
 | Guardian Web View (`/guardian` on the backend) | ✅ |

@@ -4,16 +4,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { DEFAULT_SETTINGS, type Lang, LANG_NAMES, type Settings, loadSettings, saveSettings, talkUrl } from './api';
 import { IncidentsScreen, SafetyScreen, ScamForm } from './CareScreens';
 import { CheckScreen, LinksScreen } from './CheckScreens';
-import { CallLog, DashboardScreen, LiveCallPanel, timeAgo, useDashboard, type DashboardData } from './Dashboard';
+import { CallLog, DashboardScreen, timeAgo, useDashboard, type DashboardData } from './Dashboard';
 import * as I from './icons';
 import { BigButton, Card, Tag } from './ui';
 
-type Tab = 'home' | 'check' | 'links' | 'incidents' | 'safety' | 'settings' | 'scam' | 'dashboard' | 'live' | 'calls';
+type Tab = 'home' | 'check' | 'links' | 'incidents' | 'safety' | 'settings' | 'scam' | 'dashboard' | 'calls';
 
 const TEXT_SIZE = { normal: '16px', large: '19px', xlarge: '22px' } as const;
 export const SHARED_KEY = 'sunosafe-shared';
-const SHIELD_NUMBER = process.env.NEXT_PUBLIC_SUNOSAFE_SHIELD_NUMBER ?? '';
-const maskedNumber = SHIELD_NUMBER ? SHIELD_NUMBER.replace(/^(\+\d{4})\d+(\d{2})$/, '$1 ••••• $2') : '';
 
 /** Night landscape for the hero card: drawn, not a photo, so it costs nothing to load. */
 function NightScene() {
@@ -70,30 +68,23 @@ function HomeScreen({ settings, update, go, openIncident }: {
 }) {
   const { data } = useDashboard(7, 8000);
   const rows = activityRows(data);
-  const live = data?.live_call?.active;
   return (
     <div className="space-y-4">
       <section className="relative isolate min-h-[11.5em] overflow-hidden rounded-3xl border border-[var(--s-border)]">
         <NightScene />
         <div className="relative z-10 max-w-[70%] p-5">
           <h2 className="text-[1.55em] font-extrabold leading-tight text-white drop-shadow">Your personal call guardian</h2>
-          <p className="mt-2 text-[0.92em] text-white/85 drop-shadow">Answers suspicious calls, checks messages and links, and warns you in your language.</p>
+          <p className="mt-2 text-[0.92em] text-white/85 drop-shadow">Checks messages, links and callers, and warns you out loud in your language.</p>
         </div>
       </section>
 
-      {live && (
-        <button type="button" onClick={() => go('live')}
-          className="flex w-full items-center gap-3 rounded-2xl border-2 border-[#34d399] bg-[#10b9811f] p-4 text-left font-bold">
-          <i className="s-pulse h-3 w-3 shrink-0 rounded-full bg-[var(--s-green)]" /> SunoSafe is answering a call right now. Tap to watch.
-        </button>
-      )}
 
       <label className="s-card s-glow flex items-center gap-4 rounded-2xl p-4">
         <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[#10b98126] text-[var(--s-green)]"><I.ShieldPulse size={28} /></span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[1.15em] font-extrabold">Call Shield</span>
+          <span className="block text-[1.15em] font-extrabold">SunoSafe Shield</span>
           <span className="block text-[0.85em] text-[var(--s-muted)]">
-            {settings.shield ? (maskedNumber ? `AI answers forwarded calls on ${maskedNumber}` : 'AI answers and checks calls') : 'Paused: checks are switched off'}
+            {settings.shield ? 'Checks messages, links and callers' : 'Paused: checks are switched off'}
           </span>
         </span>
         <input type="checkbox" role="switch" aria-checked={settings.shield} checked={settings.shield}
@@ -103,8 +94,7 @@ function HomeScreen({ settings, update, go, openIncident }: {
         </span>
       </label>
 
-      <div className="grid grid-cols-3 gap-3">
-        <Tile icon={<I.Wave size={28} />} label="Live monitor" onClick={() => go('live')} />
+      <div className="grid grid-cols-2 gap-3">
         <Tile icon={<I.Phone size={28} />} label="Call history" onClick={() => go('calls')} />
         <Tile icon={<I.Layers size={28} />} label="Threat logs" onClick={() => go('incidents')} />
       </div>
@@ -149,34 +139,6 @@ function HomeScreen({ settings, update, go, openIncident }: {
           <I.Phone size={22} /> Call 1930
         </a>
       </div>
-    </div>
-  );
-}
-
-function LiveScreen({ settings, openIncident }: { settings: Settings; openIncident: (id: number) => void }) {
-  const { data, error } = useDashboard(1, 3000);
-  const live = data?.live_call;
-  return (
-    <div className="space-y-4">
-      <div className="text-center">
-        <span className={`mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#10b98122] text-[var(--s-green)] ${live?.active ? 's-pulse' : ''}`}><I.ShieldPulse size={48} /></span>
-        <h2 className="mt-3 text-[1.5em] font-extrabold">SunoSafe (AI answering)</h2>
-        <p className="text-[var(--s-muted)]">{live?.active ? `Call in progress · updated ${timeAgo(live.ts)}` : 'Waiting for a forwarded call'}</p>
-      </div>
-      {error && <p role="alert" className="rounded-2xl border border-[#f04438] p-3">{error}</p>}
-      <Card><LiveCallPanel data={data} settings={settings} onOpenIncident={openIncident} /></Card>
-      <Card>
-        <h3 className="font-bold">How calls reach SunoSafe</h3>
-        <ol className="mt-2 list-decimal space-y-1 pl-6 text-[var(--s-muted)]">
-          <li>A call you decline or miss is forwarded{maskedNumber ? ` to ${maskedNumber}` : ' to your SunoSafe number'}.</li>
-          <li>SunoSafe answers, asks who is calling and never shares anything about you.</li>
-          <li>Every sentence the caller says is checked. A scam is refused and you are warned on this phone.</li>
-        </ol>
-        <a href={talkUrl(settings, null, 'shield')} className="btn-primary mt-4 flex min-h-[3.2em] items-center justify-center gap-2 rounded-2xl font-bold">
-          <I.Mic size={20} /> Test it now: you play the caller
-        </a>
-      </Card>
-      <p className="text-center text-[0.8em] text-[var(--s-muted)]">SunoSafe cannot listen to calls you answer yourself. It only handles calls forwarded to it.</p>
     </div>
   );
 }
@@ -275,7 +237,7 @@ function SettingsScreen({ settings, update, go }: { settings: Settings; update: 
 
       <CompanionCard />
 
-      <BigButton tone="quiet" onClick={() => go('safety')}><I.Phone size={22} /> Call tools: report a call, demos</BigButton>
+      <BigButton tone="quiet" onClick={() => go('safety')}><I.Phone size={22} /> Call safety: report a call, demos</BigButton>
 
       <Card>
         <h3 className="font-bold">Voice language</h3>
@@ -350,7 +312,7 @@ const NAV: { tab: Tab | 'talk'; label: string; icon: React.ReactNode }[] = [
   { tab: 'settings', label: 'Profile', icon: <I.User size={24} /> },
 ];
 const TITLES: Partial<Record<Tab, string>> = {
-  dashboard: 'Security Operations (Mini-SIEM)', live: 'Live monitor', calls: 'Call history', incidents: 'Threat logs',
+  dashboard: 'Security Operations (Mini-SIEM)', calls: 'Call history', incidents: 'Threat logs',
   check: 'Check a message', links: 'Check a link', settings: 'Settings', scam: 'Get help', safety: 'Calls',
 };
 
@@ -376,14 +338,14 @@ export default function SunoApp() {
     } catch {
       /* storage unavailable */
     }
-    // Deep links: /?incident=12, /?tab=incidents|dashboard|live|calls
+    // Deep links: /?incident=12, /?tab=incidents|dashboard|calls
     const params = new URLSearchParams(window.location.search);
     const linked = Number(params.get('incident'));
     const wanted = params.get('tab');
     if (Number.isInteger(linked) && linked > 0) {
       setIncidentId(linked);
       setTab('incidents');
-    } else if (wanted === 'incidents' || wanted === 'dashboard' || wanted === 'live' || wanted === 'calls') {
+    } else if (wanted === 'incidents' || wanted === 'dashboard' || wanted === 'calls') {
       setTab(wanted);
     }
     if (params.toString()) window.history.replaceState(null, '', '/');
@@ -426,7 +388,7 @@ export default function SunoApp() {
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#10b98126] text-[var(--s-green)]"><I.ShieldPulse size={26} /></span>
           <div className="min-w-0 flex-1">
             <h1 className="text-[1.25em] font-extrabold leading-tight">SunoSafe</h1>
-            <p className="truncate text-[0.78em] text-[var(--s-muted)]">{TITLES[tab] ?? 'AI Call Shield'}</p>
+            <p className="truncate text-[0.78em] text-[var(--s-muted)]">{TITLES[tab] ?? 'Scam guardian'}</p>
           </div>
           <a href={talkUrl(settings)} className="btn-primary hidden min-h-[2.6em] items-center gap-2 rounded-xl px-4 text-[0.9em] font-bold sm:flex">
             <I.Mic size={18} /> Talk to SunoSafe
@@ -436,8 +398,7 @@ export default function SunoApp() {
 
       <main id="main" className={`mx-auto w-full px-4 pb-[8em] pt-4 ${wide ? 'max-w-7xl' : 'max-w-xl'}`}>
         {tab === 'home' && <HomeScreen settings={settings} update={update} go={go} openIncident={openIncident} />}
-        {tab === 'dashboard' && <DashboardScreen settings={settings} onOpenIncident={openIncident} />}
-        {tab === 'live' && <LiveScreen settings={settings} openIncident={openIncident} />}
+        {tab === 'dashboard' && <DashboardScreen onOpenIncident={openIncident} />}
         {tab === 'calls' && <CallsScreen openIncident={openIncident} />}
         {tab === 'check' && (
           <CheckScreen
@@ -471,7 +432,7 @@ export default function SunoApp() {
               );
             }
             const active = tab === item.tab || (item.tab === 'incidents' && tab === 'scam')
-              || (item.tab === 'dashboard' && (tab === 'calls' || tab === 'live'));
+              || (item.tab === 'dashboard' && tab === 'calls');
             return (
               <li key={item.tab}>
                 <button type="button" onClick={() => go(item.tab as Tab)} aria-current={active ? 'page' : undefined}
