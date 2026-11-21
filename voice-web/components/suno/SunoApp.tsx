@@ -5,6 +5,7 @@ import { DEFAULT_SETTINGS, type Lang, LANG_NAMES, type Settings, loadSettings, s
 import { IncidentsScreen, SafetyScreen, ScamForm } from './CareScreens';
 import { CheckScreen, LinksScreen } from './CheckScreens';
 import { CallLog, DashboardScreen, timeAgo, useDashboard, type DashboardData } from './Dashboard';
+import { type Key, LangProvider, useT } from './i18n';
 import * as I from './icons';
 import { BigButton, Card, Tag } from './ui';
 
@@ -49,11 +50,11 @@ function Tile({ icon, label, onClick, href, wide = false }: { icon: React.ReactN
   return href ? <a href={href} className={cls}>{inner}</a> : <button type="button" onClick={onClick} className={cls}>{inner}</button>;
 }
 
-function activityRows(data: DashboardData | null) {
+function activityRows(data: DashboardData | null, t: ReturnType<typeof useT>) {
   if (!data) return [];
   const calls = data.calls.slice(0, 3).map((c) => ({
     key: `c${c.id}`, ts: c.ts, danger: c.level === 'high' || c.level === 'critical', incident: c.incident_id,
-    title: c.level === 'high' || c.level === 'critical' ? 'Scam call stopped' : 'Suspicious call',
+    title: c.level === 'high' || c.level === 'critical' ? t('home.scamCall') : t('home.suspiciousCall'),
     sub: [c.threat ?? c.kind, c.caller].filter(Boolean).join(' · '),
   }));
   const incidents = data.recent_incidents.filter((i) => !i.channels.includes('call')).slice(0, 3).map((i) => ({
@@ -66,15 +67,16 @@ function activityRows(data: DashboardData | null) {
 function HomeScreen({ settings, update, go, openIncident }: {
   settings: Settings; update: (s: Settings) => void; go: (tab: Tab) => void; openIncident: (id: number) => void;
 }) {
+  const t = useT();
   const { data } = useDashboard(7, 8000);
-  const rows = activityRows(data);
+  const rows = activityRows(data, t);
   return (
     <div className="space-y-4">
       <section className="relative isolate min-h-[11.5em] overflow-hidden rounded-3xl border border-[var(--s-border)]">
         <NightScene />
         <div className="relative z-10 max-w-[70%] p-5">
-          <h2 className="text-[1.55em] font-extrabold leading-tight text-white drop-shadow">Your personal call guardian</h2>
-          <p className="mt-2 text-[0.92em] text-white/85 drop-shadow">Checks messages, links and callers, and warns you out loud in your language.</p>
+          <h2 className="text-[1.55em] font-extrabold leading-tight text-white drop-shadow">{t('home.heroTitle')}</h2>
+          <p className="mt-2 text-[0.92em] text-white/85 drop-shadow">{t('home.heroText')}</p>
         </div>
       </section>
 
@@ -84,7 +86,7 @@ function HomeScreen({ settings, update, go, openIncident }: {
         <span className="min-w-0 flex-1">
           <span className="block text-[1.15em] font-extrabold">SunoSafe Shield</span>
           <span className="block text-[0.85em] text-[var(--s-muted)]">
-            {settings.shield ? 'Checks messages, links and callers' : 'Paused: checks are switched off'}
+            {settings.shield ? t('home.shieldOn') : t('home.shieldOff')}
           </span>
         </span>
         <input type="checkbox" role="switch" aria-checked={settings.shield} checked={settings.shield}
@@ -95,29 +97,29 @@ function HomeScreen({ settings, update, go, openIncident }: {
       </label>
 
       <div className="grid grid-cols-2 gap-3">
-        <Tile icon={<I.Phone size={28} />} label="Call history" onClick={() => go('calls')} />
-        <Tile icon={<I.Layers size={28} />} label="Threat logs" onClick={() => go('incidents')} />
+        <Tile icon={<I.Phone size={28} />} label={t('home.callHistory')} onClick={() => go('calls')} />
+        <Tile icon={<I.Layers size={28} />} label={t('home.threatLogs')} onClick={() => go('incidents')} />
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Tile icon={<I.Chart size={28} />} label="SIEM dashboard" onClick={() => go('dashboard')} />
-        <Tile icon={<I.Gear size={28} />} label="Settings" onClick={() => go('settings')} />
+        <Tile icon={<I.Chart size={28} />} label={t('home.dashboard')} onClick={() => go('dashboard')} />
+        <Tile icon={<I.Gear size={28} />} label={t('home.settings')} onClick={() => go('settings')} />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <BigButton onClick={() => go('check')}><I.Message size={22} /> Check a message</BigButton>
-        <BigButton tone="quiet" onClick={() => go('links')}><I.Link size={22} /> Check a link</BigButton>
+        <BigButton onClick={() => go('check')}><I.Message size={22} /> {t('home.checkMessage')}</BigButton>
+        <BigButton tone="quiet" onClick={() => go('links')}><I.Link size={22} /> {t('home.checkLink')}</BigButton>
       </div>
       <a href={talkUrl(settings, null, 'drill')} className="btn-quiet flex min-h-[3.4em] w-full items-center justify-center gap-2 rounded-2xl font-bold">
-        <I.Mask size={22} /> Practise: scam call drill
+        <I.Mask size={22} /> {t('home.drill')}
       </a>
 
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-[1.15em] font-extrabold">Recent activity</h3>
-          <button type="button" onClick={() => go('dashboard')} className="flex items-center text-[0.9em] font-bold text-[var(--s-green)]">View all <I.Chevron size={18} /></button>
+          <h3 className="text-[1.15em] font-extrabold">{t('home.recent')}</h3>
+          <button type="button" onClick={() => go('dashboard')} className="flex items-center text-[0.9em] font-bold text-[var(--s-green)]">{t('home.viewAll')} <I.Chevron size={18} /></button>
         </div>
         <div className="s-card divide-y divide-[var(--s-border)] rounded-2xl">
-          {rows.length === 0 && <p className="p-4 text-[var(--s-muted)]">{data ? 'Nothing suspicious in the last 7 days.' : 'Loading…'}</p>}
+          {rows.length === 0 && <p className="p-4 text-[var(--s-muted)]">{data ? t('home.nothing') : t('loading')}</p>}
           {rows.map((r) => (
             <button key={r.key} type="button" onClick={() => r.incident && openIncident(r.incident)} className="flex w-full items-center gap-3 p-4 text-left">
               <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${r.danger ? 'bg-[#f0443822] text-[#ff6b5e]' : 'bg-[#10b98122] text-[var(--s-green)]'}`}>
@@ -134,9 +136,9 @@ function HomeScreen({ settings, update, go, openIncident }: {
       </section>
 
       <div className="grid grid-cols-2 gap-3">
-        <BigButton tone="danger" onClick={() => go('scam')}><I.Siren size={22} /> I was scammed</BigButton>
+        <BigButton tone="danger" onClick={() => go('scam')}><I.Siren size={22} /> {t('home.scammed')}</BigButton>
         <a href="tel:1930" className="btn-quiet flex min-h-[3.75em] items-center justify-center gap-2 rounded-2xl text-[1.1em] font-extrabold">
-          <I.Phone size={22} /> Call 1930
+          <I.Phone size={22} /> {t('home.call1930')}
         </a>
       </div>
     </div>
@@ -144,18 +146,20 @@ function HomeScreen({ settings, update, go, openIncident }: {
 }
 
 function CallsScreen({ openIncident }: { openIncident: (id: number) => void }) {
+  const t = useT();
   const { data, error } = useDashboard(30, 10000);
   return (
     <div className="space-y-4">
-      <h2 className="text-[1.6em] font-extrabold">Call history</h2>
+      <h2 className="text-[1.6em] font-extrabold">{t('home.callHistory')}</h2>
       {error && <p role="alert" className="rounded-2xl border border-[#f04438] p-3">{error}</p>}
-      {data ? <CallLog calls={data.calls} onOpenIncident={openIncident} /> : <p className="text-[var(--s-muted)]">Loading…</p>}
+      {data ? <CallLog calls={data.calls} onOpenIncident={openIncident} /> : <p className="text-[var(--s-muted)]">{t('loading')}</p>}
     </div>
   );
 }
 
 /** Install and connect the Android companion that watches notifications automatically. */
 function CompanionCard() {
+  const t = useT();
   const [note, setNote] = useState('');
   async function connect() {
     setNote('');
@@ -165,30 +169,27 @@ function CompanionCard() {
       if (!response.ok) throw new Error(data.error ?? 'Could not prepare the connection.');
       // Opens the SunoSafe Android app, which asks you to confirm before connecting.
       window.location.href = data.link;
-      setNote('If nothing opened, install the SunoSafe Android app first (step 1).');
+      setNote(t('comp.notOpened'));
     } catch (e) {
       setNote((e as Error).message);
     }
   }
   return (
     <Card className="border-[#134e4a]">
-      <h3 className="text-[1.2em] font-extrabold">Automatic scam warnings <Tag kind="real" /></h3>
-      <p className="mt-1 text-[#4b5a56]">
-        The SunoSafe Android app watches new WhatsApp and SMS notifications and warns you aloud when one looks like a
-        scam. Ordinary messages never leave your phone.
-      </p>
+      <h3 className="text-[1.2em] font-extrabold">{t('comp.title')} <Tag kind="real" /></h3>
+      <p className="mt-1 text-[#4b5a56]">{t('comp.text')}</p>
       <ol className="mt-3 list-decimal space-y-1 pl-6">
-        <li>Install the Android app.</li>
-        <li>Open it and turn on notification access.</li>
-        <li>Come back here and tap Connect.</li>
+        <li>{t('comp.s1')}</li>
+        <li>{t('comp.s2')}</li>
+        <li>{t('comp.s3')}</li>
       </ol>
       <div className="mt-3 space-y-3">
         {/* A file download, not a page: a plain link with `download` is correct here. */}
         <a href="/api/companion/apk" download
           className="flex min-h-[3.75em] w-full items-center justify-center rounded-2xl border border-[#cfcabb] bg-[#eceae0] px-5 text-[1.1em] font-bold">
-          ⬇ 1. Download the Android app
+          ⬇ {t('comp.download')}
         </a>
-        <BigButton onClick={connect}>🔗 3. Connect Android app</BigButton>
+        <BigButton onClick={connect}>🔗 {t('comp.connect')}</BigButton>
       </div>
       {note && <p role="status" className="mt-3 font-semibold text-[#78350f]">{note}</p>}
     </Card>
@@ -209,6 +210,7 @@ function Row({ label, hint, checked, onChange }: { label: string; hint: string; 
 }
 
 function SettingsScreen({ settings, update, go }: { settings: Settings; update: (s: Settings) => void; go: (tab: Tab) => void }) {
+  const t = useT();
   const [installHint, setInstallHint] = useState(false);
   async function lock() {
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
@@ -216,19 +218,31 @@ function SettingsScreen({ settings, update, go }: { settings: Settings; update: 
   }
   return (
     <div className="space-y-4">
-      <h2 className="text-[1.6em] font-extrabold">Settings</h2>
+      <h2 className="text-[1.6em] font-extrabold">{t('home.settings')}</h2>
       <Card>
-        <Row label="SunoSafe shield" hint="When off, SunoSafe checks nothing and sends nothing." checked={settings.shield}
+        <h3 className="font-bold">{t('set.language')}</h3>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {(Object.keys(LANG_NAMES) as Lang[]).map((code) => (
+            <button key={code} type="button" lang={code} aria-pressed={settings.lang === code} onClick={() => update({ ...settings, lang: code })}
+              className={`min-h-[3.25em] rounded-2xl border-2 font-bold ${settings.lang === code ? 'border-[#134e4a] bg-[#134e4a] text-white' : 'border-[#cfcabb] bg-white'}`}>
+              {LANG_NAMES[code]}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-[0.9em] text-[#4b5a56]">{t('set.languageHint')}</p>
+      </Card>
+      <Card>
+        <Row label={t('set.shield')} hint={t('set.shieldHint')} checked={settings.shield}
           onChange={(v) => update({ ...settings, shield: v })} />
-        <Row label="Vibrate on danger" hint="The phone buzzes when something dangerous is found." checked={settings.vibrate}
+        <Row label={t('set.vibrate')} hint={t('set.vibrateHint')} checked={settings.vibrate}
           onChange={(v) => update({ ...settings, vibrate: v })} />
         <fieldset className="mt-2">
-          <legend className="font-bold">Text size</legend>
+          <legend className="font-bold">{t('set.textSize')}</legend>
           <div className="mt-2 grid grid-cols-3 gap-2">
             {(['normal', 'large', 'xlarge'] as const).map((size) => (
               <button key={size} type="button" aria-pressed={settings.textSize === size} onClick={() => update({ ...settings, textSize: size })}
                 className={`min-h-[3.5em] rounded-2xl border-2 font-bold ${settings.textSize === size ? 'border-[#134e4a] bg-[#134e4a] text-white' : 'border-[#cfcabb] bg-white'}`}>
-                {size === 'normal' ? 'Normal' : size === 'large' ? 'Large' : 'Largest'}
+                {t(size === 'normal' ? 'set.normal' : size === 'large' ? 'set.large' : 'set.xlarge')}
               </button>
             ))}
           </div>
@@ -237,33 +251,17 @@ function SettingsScreen({ settings, update, go }: { settings: Settings; update: 
 
       <CompanionCard />
 
-      <BigButton tone="quiet" onClick={() => go('safety')}><I.Phone size={22} /> Call safety: report a call, demos</BigButton>
+      <BigButton tone="quiet" onClick={() => go('safety')}><I.Phone size={22} /> {t('set.callSafety')}</BigButton>
 
       <Card>
-        <h3 className="font-bold">Voice language</h3>
-        <div className="mt-2 grid grid-cols-3 gap-2">
-          {(Object.keys(LANG_NAMES) as Lang[]).map((code) => (
-            <button key={code} type="button" aria-pressed={settings.lang === code} onClick={() => update({ ...settings, lang: code })}
-              className={`min-h-[3.25em] rounded-2xl border-2 font-bold ${settings.lang === code ? 'border-[#134e4a] bg-[#134e4a] text-white' : 'border-[#cfcabb] bg-white'}`}>
-              {LANG_NAMES[code]}
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 text-[0.9em] text-[#4b5a56]">
-          SunoSafe replies and speaks (Murf Falcon voice) in the language you choose. It listens in English, Hindi, Kannada and Tamil;
-          Malayalam listening needs an extra speech service.
-        </p>
-      </Card>
-
-      <Card>
-        <h3 className="font-bold">Put SunoSafe on your home screen</h3>
-        <p className="mt-1 text-[#4b5a56]">This also adds SunoSafe to the Share menu of WhatsApp and Messages.</p>
-        <div className="mt-3"><BigButton tone="quiet" onClick={() => setInstallHint(!installHint)}>How to install</BigButton></div>
+        <h3 className="font-bold">{t('set.homeScreen')}</h3>
+        <p className="mt-1 text-[#4b5a56]">{t('set.homeScreenText')}</p>
+        <div className="mt-3"><BigButton tone="quiet" onClick={() => setInstallHint(!installHint)}>{t('set.howInstall')}</BigButton></div>
         {installHint && (
           <ol className="mt-3 list-decimal space-y-1 pl-6">
-            <li>In Chrome, tap the ⋮ menu at the top right.</li>
-            <li>Tap <strong>Add to Home screen</strong>, then <strong>Install</strong>.</li>
-            <li>Open SunoSafe from its new icon.</li>
+            <li>{t('set.install1')}</li>
+            <li>{t('set.install2')}</li>
+            <li>{t('set.install3')}</li>
           </ol>
         )}
       </Card>
@@ -298,27 +296,39 @@ function SettingsScreen({ settings, update, go }: { settings: Settings; update: 
         </p>
       </Card>
 
-      <BigButton tone="quiet" onClick={lock}>🔒 Lock SunoSafe</BigButton>
+      <BigButton tone="quiet" onClick={lock}>🔒 {t('set.lock')}</BigButton>
     </div>
   );
 }
 
 
-const NAV: { tab: Tab | 'talk'; label: string; icon: React.ReactNode }[] = [
-  { tab: 'home', label: 'Home', icon: <I.Home size={24} /> },
-  { tab: 'incidents', label: 'Activity', icon: <I.Activity size={24} /> },
-  { tab: 'talk', label: 'Talk', icon: <I.ShieldPulse size={30} /> },
-  { tab: 'dashboard', label: 'Reports', icon: <I.Report size={24} /> },
-  { tab: 'settings', label: 'Profile', icon: <I.User size={24} /> },
+const NAV: { tab: Tab | 'talk'; label: Key; icon: React.ReactNode }[] = [
+  { tab: 'home', label: 'nav.home', icon: <I.Home size={24} /> },
+  { tab: 'incidents', label: 'nav.activity', icon: <I.Activity size={24} /> },
+  { tab: 'talk', label: 'nav.talk', icon: <I.ShieldPulse size={30} /> },
+  { tab: 'dashboard', label: 'nav.reports', icon: <I.Report size={24} /> },
+  { tab: 'settings', label: 'nav.profile', icon: <I.User size={24} /> },
 ];
-const TITLES: Partial<Record<Tab, string>> = {
-  dashboard: 'Security Operations (Mini-SIEM)', calls: 'Call history', incidents: 'Threat logs',
-  check: 'Check a message', links: 'Check a link', settings: 'Settings', scam: 'Get help', safety: 'Calls',
+const TITLES: Partial<Record<Tab, Key>> = {
+  dashboard: 'title.dashboard', calls: 'home.callHistory', incidents: 'home.threatLogs',
+  check: 'home.checkMessage', links: 'home.checkLink', settings: 'home.settings', scam: 'title.scam', safety: 'title.safety',
 };
 
 export default function SunoApp() {
-  const [tab, setTab] = useState<Tab>('home');
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  useEffect(() => {
+    document.documentElement.lang = settings.lang === 'en' ? 'en-IN' : `${settings.lang}-IN`;
+  }, [settings.lang]);
+  return (
+    <LangProvider value={settings.lang}>
+      <SunoShell settings={settings} setSettings={setSettings} />
+    </LangProvider>
+  );
+}
+
+function SunoShell({ settings, setSettings }: { settings: Settings; setSettings: (s: Settings) => void }) {
+  const t = useT();
+  const [tab, setTab] = useState<Tab>('home');
   const [shared, setShared] = useState('');
   const [sharedSource, setSharedSource] = useState<'share' | 'paste'>('paste');
   const [incidentId, setIncidentId] = useState<number | null>(null);
@@ -355,7 +365,7 @@ export default function SunoApp() {
   const update = useCallback((next: Settings) => {
     setSettings(next);
     saveSettings(next);
-  }, []);
+  }, [setSettings]);
 
   const go = useCallback((next: Tab) => {
     if (next === 'incidents') setIncidentId(null);
@@ -376,22 +386,22 @@ export default function SunoApp() {
   return (
     <div className="suno min-h-dvh" style={{ fontSize: TEXT_SIZE[settings.textSize] }}>
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-xl focus:bg-[var(--s-surface)] focus:p-3">
-        Skip to content
+        {t('nav.skip')}
       </a>
       <header className="sticky top-0 z-30 border-b border-[var(--s-border)] bg-[#07130fe6] backdrop-blur">
         <div className={`mx-auto flex items-center gap-3 px-4 py-3 ${wide ? 'max-w-7xl' : 'max-w-xl'}`}>
           {tab !== 'home' ? (
-            <button type="button" onClick={() => go('home')} aria-label="Back to home" className="grid h-10 w-10 place-items-center rounded-xl text-[var(--s-muted)] hover:bg-[var(--s-elev)]">
+            <button type="button" onClick={() => go('home')} aria-label={t('nav.back')} className="grid h-10 w-10 place-items-center rounded-xl text-[var(--s-muted)] hover:bg-[var(--s-elev)]">
               <I.Back />
             </button>
           ) : null}
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#10b98126] text-[var(--s-green)]"><I.ShieldPulse size={26} /></span>
           <div className="min-w-0 flex-1">
             <h1 className="text-[1.25em] font-extrabold leading-tight">SunoSafe</h1>
-            <p className="truncate text-[0.78em] text-[var(--s-muted)]">{TITLES[tab] ?? 'Scam guardian'}</p>
+            <p className="truncate text-[0.78em] text-[var(--s-muted)]">{t(TITLES[tab] ?? 'title.default')}</p>
           </div>
           <a href={talkUrl(settings)} className="btn-primary hidden min-h-[2.6em] items-center gap-2 rounded-xl px-4 text-[0.9em] font-bold sm:flex">
-            <I.Mic size={18} /> Talk to SunoSafe
+            <I.Mic size={18} /> {t('nav.talk')}
           </a>
         </div>
       </header>
@@ -424,7 +434,7 @@ export default function SunoApp() {
             if (item.tab === 'talk') {
               return (
                 <li key="talk" className="flex justify-center">
-                  <a href={talkUrl(settings)} aria-label="Talk to SunoSafe"
+                  <a href={talkUrl(settings)} aria-label={t('nav.talk')}
                     className="s-pulse -mt-7 mb-2 grid h-16 w-16 place-items-center rounded-full border-4 border-[#07130f] bg-gradient-to-br from-[#10b981] to-[#047857] text-white shadow-lg">
                     {item.icon}
                   </a>
@@ -438,7 +448,7 @@ export default function SunoApp() {
                 <button type="button" onClick={() => go(item.tab as Tab)} aria-current={active ? 'page' : undefined}
                   className={`flex min-h-[4.2em] w-full flex-col items-center justify-center gap-1 text-[0.78em] font-bold focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--s-green)] ${active ? 'text-[var(--s-green)]' : 'text-[var(--s-muted)]'}`}>
                   {item.icon}
-                  {item.label}
+                  {t(item.label)}
                 </button>
               </li>
             );

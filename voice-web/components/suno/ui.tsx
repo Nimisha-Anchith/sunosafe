@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { type AnalyzeResult, type LinkReport, type Verdict, hostOf } from './api';
+import { type Key, useLang, useT } from './i18n';
 
 /** Honest label for how real a feature is. */
 export function Tag({ kind }: { kind: 'real' | 'simulated' | 'planned' | 'setup' }) {
@@ -11,7 +12,8 @@ export function Tag({ kind }: { kind: 'real' | 'simulated' | 'planned' | 'setup'
     planned: 'tag-plan',
     setup: 'tag-setup',
   }[kind];
-  const text = { real: 'Working', simulated: 'Simulated demo', planned: 'Planned for Android app', setup: 'Needs a phone number' }[kind];
+  const t = useT();
+  const text = t(`tag.${kind}` as Key);
   return (
     <span className={`inline-block rounded-full border px-3 py-0.5 align-middle text-[0.75em] font-bold ${styles}`}>{text}</span>
   );
@@ -82,13 +84,15 @@ export function ErrorNote({ message }: { message: string }) {
 }
 
 const VERDICT_STYLE = {
-  danger: { box: 'verdict-danger', head: 'text-[#ff8a80]', icon: '⛔', title: 'Danger' },
-  caution: { box: 'verdict-caution', head: 'text-[#fbbf24]', icon: '⚠️', title: 'Be careful' },
-  no_known_issues: { box: 'verdict-ok', head: 'text-[#5fd3a5]', icon: '✔️', title: 'No known problems found' },
+  danger: { box: 'verdict-danger', head: 'text-[#ff8a80]', icon: '⛔', title: 'verdict.danger', advice: 'verdict.adviceDanger' },
+  caution: { box: 'verdict-caution', head: 'text-[#fbbf24]', icon: '⚠️', title: 'verdict.caution', advice: 'verdict.adviceCaution' },
+  no_known_issues: { box: 'verdict-ok', head: 'text-[#5fd3a5]', icon: '✔️', title: 'verdict.ok', advice: 'verdict.adviceOk' },
 } as const;
 
 export function VerdictCard({ verdict }: { verdict: Verdict }) {
   const style = VERDICT_STYLE[verdict.label];
+  const t = useT();
+  const lang = useLang();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     ref.current?.focus(); // screen readers announce the result as soon as it arrives
@@ -97,12 +101,15 @@ export function VerdictCard({ verdict }: { verdict: Verdict }) {
     <div ref={ref} tabIndex={-1} role="status" className={`scroll-mt-28 rounded-3xl border-4 p-5 outline-none ${style.box}`}>
       <h3 className={`flex items-center gap-3 text-[1.5em] font-extrabold ${style.head}`}>
         <span aria-hidden>{style.icon}</span>
-        {style.title}
+        {t(style.title)}
       </h3>
-      <p className="mt-2 text-[1.1em] font-semibold">{verdict.summary}</p>
+      {/* In other languages: a fixed, reviewed advice line first; the analysis details are English for now. */}
+      {lang !== 'en' && <p className="mt-2 text-[1.15em] font-bold">{t(style.advice)}</p>}
+      {lang !== 'en' && <p className="mt-2 text-[0.85em] text-[var(--s-muted)]">{t('verdict.englishNote')}</p>}
+      <p className="mt-2 text-[1.1em] font-semibold" lang="en">{verdict.summary}</p>
       {verdict.reasons.length > 0 && (
         <>
-          <h4 className="mt-4 font-bold">Why</h4>
+          <h4 className="mt-4 font-bold">{t('verdict.why')}</h4>
           <ul className="mt-1 list-disc space-y-1 pl-6">
             {verdict.reasons.slice(0, 4).map((r) => (
               <li key={r.rule}>{r.text}</li>
@@ -112,7 +119,7 @@ export function VerdictCard({ verdict }: { verdict: Verdict }) {
       )}
       {verdict.uncertainties.length > 0 && (
         <>
-          <h4 className="mt-4 font-bold">What I could not check</h4>
+          <h4 className="mt-4 font-bold">{t('verdict.couldNot')}</h4>
           <ul className="mt-1 list-disc space-y-1 pl-6 text-[#4b5a56]">
             {verdict.uncertainties.map((u) => (
               <li key={u}>{u}</li>
@@ -125,13 +132,14 @@ export function VerdictCard({ verdict }: { verdict: Verdict }) {
 }
 
 export function LinkFacts({ link }: { link: LinkReport }) {
+  const t = useT();
   const start = hostOf(link.url);
   const end = hostOf(link.final_url);
   const checks = link.tool_runs.filter((t) => t.tool !== 'url_normalize');
   return (
     <Card>
-      <h4 className="font-bold">Link to: {start || 'unknown website'}</h4>
-      {end && end !== start && <p className="mt-1">It finally leads to: <strong>{end}</strong></p>}
+      <h4 className="font-bold">{t('facts.to', { host: start || t('facts.unknown') })}</h4>
+      {end && end !== start && <p className="mt-1">{t('facts.leads')} <strong>{end}</strong></p>}
       {link.findings.length > 0 ? (
         <ul className="mt-2 list-disc space-y-1 pl-6">
           {link.findings.slice(0, 6).map((f, i) => (
@@ -139,10 +147,10 @@ export function LinkFacts({ link }: { link: LinkReport }) {
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-[#4b5a56]">No warning signs were found for this link.</p>
+        <p className="mt-2 text-[#4b5a56]">{t('facts.none')}</p>
       )}
       <p className="mt-3 text-[0.85em] text-[#4b5a56]">
-        Checks run: {checks.map((t) => `${t.tool.replace('_', ' ')} (${t.status.replace('_', ' ')})`).join(', ')}
+        {t('facts.checks')} {checks.map((t) => `${t.tool.replace('_', ' ')} (${t.status.replace('_', ' ')})`).join(', ')}
       </p>
     </Card>
   );
@@ -166,6 +174,7 @@ export function ConfirmSheet({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const cancelRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     cancelRef.current?.focus();
@@ -183,7 +192,7 @@ export function ConfirmSheet({
           <BigButton tone="danger" onClick={onConfirm}>{confirmLabel}</BigButton>
           <button ref={cancelRef} type="button" onClick={onCancel}
             className="min-h-[3.5em] w-full rounded-2xl border border-[#cfcabb] bg-[#eceae0] text-[1.1em] font-bold focus:outline-none focus:ring-4 focus:ring-[#134e4a]/40">
-            No, go back
+            {t('confirm.no')}
           </button>
         </div>
       </div>

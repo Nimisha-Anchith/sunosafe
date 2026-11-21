@@ -133,17 +133,16 @@ class MainActivity : Activity() {
     private fun refresh() {
         fun mark(ok: Boolean) = if (ok) "✔" else "○"
         val watching = listenerEnabled() && Prefs.isPaired(this) && Prefs.monitoringOn(this)
-        statusTitle.text = if (watching) "🛡  Protecting you" else "⚠  Setup needed"
+        statusTitle.text = if (watching) "🛡  ${tr("protecting")}" else "⚠  ${tr("setupNeeded")}"
         statusBody.text = buildString {
-            append(if (watching) "SunoSafe will warn you aloud when a message or caller looks like a scam.\n\n"
-                   else "Finish the steps below so SunoSafe can warn you without being asked.\n\n")
-            append("${mark(listenerEnabled())}  Notification access\n")
-            append("${mark(warningsAllowed())}  Allowed to show warnings\n")
-            append("${mark(Prefs.isPaired(this@MainActivity))}  Connected to your SunoSafe\n")
-            append("${mark(screeningRoleHeld())}  Checking incoming callers\n")
-            append("${mark(screenReaderOn())}  Checking messages on screen (WhatsApp, SMS)\n")
-            append("${mark(SmsInbox.allowed(this@MainActivity))}  Reading new SMS and the SMS inbox\n")
-            append("${mark(ProtectionService.running)}  Protection running in the background")
+            append(tr(if (watching) "statusOn" else "statusOff") + "\n\n")
+            append("${mark(listenerEnabled())}  ${tr("chkNotif")}\n")
+            append("${mark(warningsAllowed())}  ${tr("chkWarn")}\n")
+            append("${mark(Prefs.isPaired(this@MainActivity))}  ${tr("chkPaired")}\n")
+            append("${mark(screeningRoleHeld())}  ${tr("chkCalls")}\n")
+            append("${mark(screenReaderOn())}  ${tr("chkScreen")}\n")
+            append("${mark(SmsInbox.allowed(this@MainActivity))}  ${tr("chkSms")}\n")
+            append("${mark(ProtectionService.running)}  ${tr("chkRunning")}")
         }
         (statusCard.background as GradientDrawable).apply {
             setColor(if (watching) Color.parseColor("#0F2E24") else Color.parseColor("#2A2210"))
@@ -238,6 +237,8 @@ class MainActivity : Activity() {
     }
 
     // ------------------------------------------------------------------ screen
+    private fun tr(key: String, vararg vars: Pair<String, String>) = Tr.t(this, key, *vars)
+
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     private fun rounded(color: Int, radius: Int = 22, stroke: Int? = null) = GradientDrawable().apply {
@@ -311,7 +312,7 @@ class MainActivity : Activity() {
         header.addView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(text("SunoSafe", 26f, bold = true))
-            addView(text("AI Call Shield", 15f, color = muted))
+            addView(text(tr("subtitle"), 15f, color = muted))
         })
         root.addView(header)
         root.addView(View(this).apply {
@@ -353,53 +354,53 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 .apply { topMargin = dp(14) }
-            addView(tile("〰", "Live monitor", "/?tab=live"))
-            addView(tile("📞", "Call history", "/?tab=calls"))
-            addView(tile("📊", "SIEM dashboard", "/?tab=dashboard"))
+            addView(tile("📞", tr("callHistory"), "/?tab=calls"))
+            addView(tile("🗂", tr("threatLogs"), "/?tab=incidents"))
+            addView(tile("📊", tr("dashboard"), "/?tab=dashboard"))
         }
         column.addView(tiles)
 
-        column.addView(card("Check a message",
-            text("Press and hold a message in WhatsApp or Messages → Share → SunoSafe. Or copy it, come back and tap the green button.", 16f, color = muted),
-            button("🔍  Check the message I copied") { startActivity(Intent(this, ShareCheckActivity::class.java)) },
-            button("💬  Open WhatsApp", elev, ink) {
+        column.addView(card(tr("checkTitle"),
+            text(tr("checkDesc"), 16f, color = muted),
+            button("🔍  ${tr("checkCopied")}") { startActivity(Intent(this, ShareCheckActivity::class.java)) },
+            button("💬  ${tr("openWa")}", elev, ink) {
                 val open = packageManager.getLaunchIntentForPackage("com.whatsapp")
                 if (open != null) startActivity(open) else Toast.makeText(this, "WhatsApp is not installed.", Toast.LENGTH_SHORT).show()
             },
-            button("✉️  Open Messages", elev, ink) {
+            button("✉️  ${tr("openSms")}", elev, ink) {
                 startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_MESSAGING))
             },
         ))
 
-        column.addView(card("Hear SunoSafe",
-            text("Talk to the SunoSafe voice agent (Agora Conversational AI with a Murf Falcon voice).", 16f, color = muted),
-            button("🎤  Talk about my latest warning") {
+        column.addView(card(tr("hearTitle"),
+            text(tr("hearDesc"), 16f, color = muted),
+            button("🎤  ${tr("talkLatest")}") {
                 val incident = Prefs.lastIncident(this)
                 openWeb("/talk?lang=${Prefs.lang(this)}" + if (incident > 0) "&incident=$incident" else "")
             },
-            button("🎭  Practise: scam call drill", elev, ink) { openWeb("/talk?mode=drill&lang=${Prefs.lang(this)}") },
-            button("📋  Open incidents and evidence", elev, ink) { openWeb("/?tab=incidents") },
+            button("🎭  ${tr("drill")}", elev, ink) { openWeb("/talk?mode=drill&lang=${Prefs.lang(this)}") },
+            button("📋  ${tr("incidents")}", elev, ink) { openWeb("/?tab=incidents") },
         ))
 
-        column.addView(card("Set up",
-            button("1.  Turn on notification access") { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
-            button("2.  Allow SunoSafe to show warnings") {
+        column.addView(card(tr("setupTitle"),
+            button(tr("step1")) { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
+            button(tr("step2")) {
                 if (Build.VERSION.SDK_INT >= 33 && !warningsAllowed()) {
                     requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
                 } else Toast.makeText(this, "Warnings are already allowed.", Toast.LENGTH_SHORT).show()
             },
-            text("3.  Connect: open your SunoSafe web app on this phone → Settings → \"Connect Android app\".", 16f),
-            button("4.  Let SunoSafe check unknown callers") { requestScreeningRole() },
-            button("6.  Read my SMS (new + inbox)") {
-                if (SmsInbox.allowed(this)) scanInbox()
-                else requestPermissions(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS), 6)
-            },
-            button("5.  Check messages I open in WhatsApp / SMS") {
+            text(tr("step3"), 16f),
+            button(tr("step4")) { requestScreeningRole() },
+            button(tr("step5")) {
                 Toast.makeText(this, "Installed apps → SunoSafe screen checking → On. If it is greyed out: " +
                     "App info → ⋮ → Allow restricted settings.", Toast.LENGTH_LONG).show()
                 startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             },
-            button("Keep SunoSafe running (battery)", elev, ink) {
+            button(tr("step6")) {
+                if (SmsInbox.allowed(this)) scanInbox()
+                else requestPermissions(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS), 6)
+            },
+            button(tr("battery"), elev, ink) {
                 startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
             },
         ))
@@ -433,32 +434,23 @@ class MainActivity : Activity() {
         }
 
         val appSwitches = Prefs.WATCHED_APPS.entries.distinctBy { it.value }.map { (pkg, name) ->
-            switch("Watch $name", Prefs.appEnabled(this, pkg)) { on -> Prefs.setAppEnabled(this, pkg, on) }
+            switch(tr("watchApp", "app" to name), Prefs.appEnabled(this, pkg)) { on -> Prefs.setAppEnabled(this, pkg, on) }
         }.toTypedArray()
 
-        column.addView(card("Controls",
-            switch("Watch for scam messages", Prefs.monitoringOn(this)) { Prefs.setMonitoring(this, it) },
-            switch("Speak warnings aloud", Prefs.speakOn(this)) { Prefs.setSpeak(this, it) },
-            text("Warning language", 17f, bold = true),
+        column.addView(card(tr("controls"),
+            switch(tr("watchScam"), Prefs.monitoringOn(this)) { Prefs.setMonitoring(this, it) },
+            switch(tr("speak"), Prefs.speakOn(this)) { Prefs.setSpeak(this, it) },
+            text(tr("language"), 17f, bold = true),
             languageRow,
-            text("Apps to watch", 17f, bold = true),
+            text(tr("appsToWatch"), 17f, bold = true),
             *appSwitches,
-            button("🔔  Try a practice warning") { practiceWarning() },
+            button("🔔  ${tr("practice")}") { practiceWarning() },
         ))
 
         stats = text("", 15f, color = muted)
-        column.addView(card("Activity", stats))
+        column.addView(card(tr("activity"), stats))
 
-        column.addView(card("What SunoSafe reads and sends",
-            text(
-                "• Only notifications from the apps switched on above. Only the title and text Android shows. " +
-                    "Not your chat history, photos or contacts.\n" +
-                    "• A message is sent for checking only if it has a link or wording often used in scams. " +
-                    "Ordinary messages never leave this phone.\n" +
-                    "• For callers, SunoSafe sees only the number of callers not in your contacts. It never hears calls, " +
-                    "never blocks them, and records a number only if it is linked to a scam message.\n" +
-                    "• Stored evidence masks phone numbers, card numbers and codes.\n" +
-                    "• Turn anything off here, or remove access in Android settings, at any time.", 15f, color = muted)))
+        column.addView(card(tr("privacyTitle"), text(tr("privacy"), 15f, color = muted)))
 
         root.addView(column)
         return ScrollView(this).apply { addView(root) }
