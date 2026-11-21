@@ -71,8 +71,9 @@ function HomeScreen({ settings, update, go, openIncident }: {
   const { data } = useDashboard(7, 8000);
   const rows = activityRows(data, t);
   return (
-    <div className="space-y-4">
-      <section className="relative isolate min-h-[11.5em] overflow-hidden rounded-3xl border border-[var(--s-border)]">
+    <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0">
+      <div className="space-y-4">
+      <section className="relative isolate lg:min-h-[14em] min-h-[11.5em] overflow-hidden rounded-3xl border border-[var(--s-border)]">
         <NightScene />
         <div className="relative z-10 max-w-[70%] p-5">
           <h2 className="text-[1.55em] font-extrabold leading-tight text-white drop-shadow">{t('home.heroTitle')}</h2>
@@ -105,6 +106,9 @@ function HomeScreen({ settings, update, go, openIncident }: {
         <Tile icon={<I.Gear size={28} />} label={t('home.settings')} onClick={() => go('settings')} />
       </div>
 
+      </div>
+
+      <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <BigButton onClick={() => go('check')}><I.Message size={22} /> {t('home.checkMessage')}</BigButton>
         <BigButton tone="quiet" onClick={() => go('links')}><I.Link size={22} /> {t('home.checkLink')}</BigButton>
@@ -140,6 +144,7 @@ function HomeScreen({ settings, update, go, openIncident }: {
         <a href="tel:1930" className="btn-quiet flex min-h-[3.75em] items-center justify-center gap-2 rounded-2xl text-[1.1em] font-extrabold">
           <I.Phone size={22} /> {t('home.call1930')}
         </a>
+      </div>
       </div>
     </div>
   );
@@ -382,6 +387,11 @@ function SunoShell({ settings, setSettings }: { settings: Settings; setSettings:
 
   const consumeShared = useCallback(() => setShared(''), []);
   const wide = tab === 'dashboard';
+  // Phones keep the single column; a PC (lg, 1024px+) gets a wider page that suits each screen.
+  const pageWidth = wide ? 'max-w-7xl'
+    : tab === 'home' ? 'max-w-xl lg:max-w-6xl'
+    : tab === 'incidents' ? 'max-w-xl lg:max-w-4xl'
+    : 'max-w-xl lg:max-w-3xl';
 
   return (
     <div className="suno min-h-dvh" style={{ fontSize: TEXT_SIZE[settings.textSize] }}>
@@ -389,7 +399,7 @@ function SunoShell({ settings, setSettings }: { settings: Settings; setSettings:
         {t('nav.skip')}
       </a>
       <header className="sticky top-0 z-30 border-b border-[var(--s-border)] bg-[#07130fe6] backdrop-blur">
-        <div className={`mx-auto flex items-center gap-3 px-4 py-3 ${wide ? 'max-w-7xl' : 'max-w-xl'}`}>
+        <div className={`mx-auto flex items-center gap-3 px-4 py-3 ${wide ? 'max-w-7xl' : 'max-w-xl lg:max-w-6xl'}`}>
           {tab !== 'home' ? (
             <button type="button" onClick={() => go('home')} aria-label={t('nav.back')} className="grid h-10 w-10 place-items-center rounded-xl text-[var(--s-muted)] hover:bg-[var(--s-elev)]">
               <I.Back />
@@ -400,13 +410,26 @@ function SunoShell({ settings, setSettings }: { settings: Settings; setSettings:
             <h1 className="text-[1.25em] font-extrabold leading-tight">SunoSafe</h1>
             <p className="truncate text-[0.78em] text-[var(--s-muted)]">{t(TITLES[tab] ?? 'title.default')}</p>
           </div>
+          {/* On a PC the main sections sit in the header instead of the bottom bar. */}
+          <nav aria-label="Main" className="hidden items-center gap-1 lg:flex">
+            {NAV.filter((item) => item.tab !== 'talk').map((item) => {
+              const active = tab === item.tab || (item.tab === 'incidents' && tab === 'scam')
+                || (item.tab === 'dashboard' && tab === 'calls');
+              return (
+                <button key={item.tab} type="button" onClick={() => go(item.tab as Tab)} aria-current={active ? 'page' : undefined}
+                  className={`rounded-xl px-3 py-2 text-[0.9em] font-bold hover:bg-[var(--s-elev)] focus:outline-none focus:ring-2 focus:ring-[var(--s-green)] ${active ? 'bg-[var(--s-elev)] text-[var(--s-green)]' : 'text-[var(--s-muted)]'}`}>
+                  {t(item.label)}
+                </button>
+              );
+            })}
+          </nav>
           <a href={talkUrl(settings)} className="btn-primary hidden min-h-[2.6em] items-center gap-2 rounded-xl px-4 text-[0.9em] font-bold sm:flex">
             <I.Mic size={18} /> {t('nav.talk')}
           </a>
         </div>
       </header>
 
-      <main id="main" className={`mx-auto w-full px-4 pb-[8em] pt-4 ${wide ? 'max-w-7xl' : 'max-w-xl'}`}>
+      <main id="main" className={`mx-auto w-full px-4 pb-[8em] pt-4 lg:pb-12 lg:pt-6 ${pageWidth}`}>
         {tab === 'home' && <HomeScreen settings={settings} update={update} go={go} openIncident={openIncident} />}
         {tab === 'dashboard' && <DashboardScreen onOpenIncident={openIncident} />}
         {tab === 'calls' && <CallsScreen openIncident={openIncident} />}
@@ -428,7 +451,7 @@ function SunoShell({ settings, setSettings }: { settings: Settings; setSettings:
         {tab === 'settings' && <SettingsScreen settings={settings} update={update} go={go} />}
       </main>
 
-      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--s-border)] bg-[#0a1813f2] pb-[env(safe-area-inset-bottom)] backdrop-blur">
+      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t lg:hidden border-[var(--s-border)] bg-[#0a1813f2] pb-[env(safe-area-inset-bottom)] backdrop-blur">
         <ul className="mx-auto grid max-w-xl grid-cols-5 items-end">
           {NAV.map((item) => {
             if (item.tab === 'talk') {
