@@ -117,7 +117,11 @@ class SunoNotificationListener : NotificationListenerService() {
         Prefs.bump(this, "sent")
         val context = applicationContext
         worker.execute {
-            val verdict = Backend.report(context, sbn.packageName, title, text)
+            var verdict = Backend.report(context, sbn.packageName, title, text)
+            if (verdict == null) {               // network blip or the server waking up: try once more
+                Thread.sleep(4000)
+                verdict = Backend.report(context, sbn.packageName, title, text)
+            }
             when {
                 verdict == null ->
                     Prefs.setLastResult(context, "A message in $appName could not be checked (no connection to SunoSafe). " +

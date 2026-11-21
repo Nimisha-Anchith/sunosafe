@@ -41,7 +41,11 @@ object Checker {
         if (!firstTime(text)) return
         Prefs.bump(context, "sent")
         worker.execute {
-            val verdict = Backend.report(context, appPackage, title, text.take(4000), source = source)
+            var verdict = Backend.report(context, appPackage, title, text.take(4000), source = source)
+            if (verdict == null) {               // network blip or the server waking up: try once more
+                Thread.sleep(4000)
+                verdict = Backend.report(context, appPackage, title, text.take(4000), source = source)
+            }
             when {
                 verdict == null -> Prefs.setLastResult(context,
                     "A message in $appName could not be checked (no connection to SunoSafe). This does not mean it is safe.")

@@ -25,7 +25,8 @@ data class Verdict(
  * never crash the listener, and it is shown as "could not check", never "safe".
  */
 object Backend {
-    private const val TIMEOUT_MS = 20_000
+    // The hosted backend (free plan) can take ~30 s to wake up after being idle: wait long enough.
+    private const val TIMEOUT_MS = 45_000
     private val AUDIO_ID = Regex("^[A-Za-z0-9-]{3,40}$")
 
     /**
