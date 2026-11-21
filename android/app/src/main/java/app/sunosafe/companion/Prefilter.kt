@@ -24,7 +24,11 @@ object Prefilter {
             """anydesk|teamviewer|quick\s?support|\.apk|install (this|the|our) app|""" +
             """arrest\w*|police|cbi|customs|court|warrant|fir|narcotics|""" +
             """electricity|bijli|aadhaa?r|pan card|verify your|update your|click (here|the link)|""" +
-            """turant|abhi|band ho)\b|तुरंत|पुलिस|गिरफ्तार|ओटीपी|बंद|ब्लॉक"""
+            """turant|abhi|band ho)\b|तुरंत|पुलिस|गिरफ्तार|ओटीपी|बंद|ब्लॉक|बिजली|केवाईसी|लॉटरी|इनाम|आधार""" +
+            // Malayalam, Kannada, Tamil: OTP, police, arrest, blocked, electricity, cut off, KYC, urgent, lottery, prize, Aadhaar
+            """|ഒടിപി|ഓടിപി|ഒ\.ടി\.പി|പോലീസ്|പൊലീസ്|അറസ്റ്റ്|ബ്ലോക്ക്|വൈദ്യുതി|കറന്റ്|വിച്ഛേദി|കെവൈസി|ഉടൻ|ലോട്ടറി|സമ്മാനം|ആധാർ""" +
+            """|ಒಟಿಪಿ|ಓಟಿಪಿ|ಪೊಲೀಸ್|ಬಂಧನ|ಬ್ಲಾಕ್|ವಿದ್ಯುತ್|ಕರೆಂಟ್|ಕಡಿತ|ಕೆವೈಸಿ|ತಕ್ಷಣ|ಲಾಟರಿ|ಬಹುಮಾನ|ಆಧಾರ್""" +
+            """|ஓடிபி|ஓ\.டி\.பி|காவல்|போலீஸ்|கைது|முடக்க|மின்சாரம்|மின்\s*இணைப்பு|துண்டி|கேஒய்சி|உடனே|லாட்டரி|பரிசு|ஆதார்"""
     )
 
     /** Why this notification deserves a full check, or null if it should stay on the phone. */

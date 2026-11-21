@@ -37,4 +37,19 @@ class PrefilterTest {
             "पुलिस आपके घर आएगी, तुरंत कॉल करें",
         ).forEach { assertNotNull(it, Prefilter.reason(it)) }
     }
+
+    @Test
+    fun indianScriptScamWordsWithoutLinksAreSentForChecking() {
+        listOf(
+            "നിങ്ങളുടെ KSEB വൈദ്യുതി ബിൽ കുടിശ്ശികയായതിനാൽ ഇന്ന് രാത്രി വൈദ്യുതി വിച്ഛേദിക്കും. ഈ നമ്പറിൽ വിളിക്കുക: 9847012345",
+            "ನಿಮ್ಮ ವಿದ್ಯುತ್ ಸಂಪರ್ಕ ಇಂದು ಕಡಿತಗೊಳ್ಳುತ್ತದೆ, ಈ ಸಂಖ್ಯೆಗೆ ಕರೆ ಮಾಡಿ",
+            "உங்கள் மின் இணைப்பு இன்று துண்டிக்கப்படும், உடனே அழைக்கவும்",
+        ).forEach { assertNotNull(it, Prefilter.reason(it)) }
+    }
+
+    @Test
+    fun ordinaryIndianScriptMessagesStayOnThePhone() {
+        listOf("അമ്മ: ഭക്ഷണം തയ്യാറാണ്", "ನಾಳೆ ಸಂಜೆ ಭೇಟಿಯಾಗೋಣ", "நாளை மாலை சந்திப்போம்")
+            .forEach { assertNull(it, Prefilter.reason(it)) }
+    }
 }
